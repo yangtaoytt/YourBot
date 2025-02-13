@@ -218,7 +218,7 @@ public class MemeProcessor : IProcessorCore<CommandData,
                     await using var cmd = new MySqlCommand(insertText, conn, transaction);
 
                     cmd.Parameters.AddWithValue("@content",
-                        textEntity.Text.Length > 250 ? textEntity.Text.Substring(0, 250) : textEntity.Text);
+                        textEntity.Text.Length > 800 ? textEntity.Text.Substring(0, 800) : textEntity.Text);
                     cmd.Parameters.AddWithValue("@meme_id", memeId);
                     cmd.Parameters.AddWithValue("@sequence", i);
                     cmd.ExecuteNonQuery();
