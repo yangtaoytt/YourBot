@@ -42,10 +42,16 @@ public class VersionProcessor : IProcessorCore<CommandData, NullSharedDataWrappe
             return [];
         }
 
-        var queryResult = QueryLastVersion(configs.databaseConfig.ConnectionString);
-        var reply = "Version: " + queryResult.versionNumber + "\n" +
-                    "Update Time: " + queryResult.updateTime + "\n" +
-                    "Description: " + queryResult.versionDescrption;
+        string reply;
+        try {
+            var queryResult = QueryLastVersion(configs.databaseConfig.ConnectionString);
+            reply = "Version: " + queryResult.versionNumber + "\n" +
+                        "Update Time: " + queryResult.updateTime + "\n" +
+                        "Description: " + queryResult.versionDescrption;
+        } catch (Exception) {
+            reply = "No version data found";
+        }
+        
 
         var groupMessageChain = MessageBuilder.Group(data.MessageChain.GroupUin!.Value).Text(reply).Build();
         var sendGroupMessageData =
