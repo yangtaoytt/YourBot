@@ -6,17 +6,17 @@ using Fuwafuwa.Core.Subjects;
 using Lagrange.Core.Message;
 using Lagrange.Core.Message.Entity;
 using YourBot.AI.Interface;
+using YourBot.Config.Implement.Level1.Service.Group;
 using YourBot.Fuwafuwa.Application.Attribute.Executor;
 using YourBot.Fuwafuwa.Application.Attribute.Processor;
 using YourBot.Fuwafuwa.Application.Data.ExecutorData;
-using YourBot.Fuwafuwa.Application.Data.InitData.Group;
 using YourBot.Fuwafuwa.Application.Data.ProcessorData;
 
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group;
 
 // ReSharper disable InconsistentNaming
-public class AIReviewProcessor : IProcessorCore<MessageData, AsyncSharedDataWrapper<(IAI, AIReviewInitData)>, (IAI,
-    AIReviewInitData)> {
+public class AIReviewProcessor : IProcessorCore<MessageData, AsyncSharedDataWrapper<(IAI, AIReviewConfig)>, (IAI,
+    AIReviewConfig)> {
     // ReSharper restore InconsistentNaming
 
     private readonly Dictionary<uint, (List<IMessageEntity> messageEntities, List<int> onceMessageCountList)>
@@ -26,25 +26,20 @@ public class AIReviewProcessor : IProcessorCore<MessageData, AsyncSharedDataWrap
         return ReadGroupQMessageAttribute.GetInstance();
     }
 
-    public static AsyncSharedDataWrapper<(IAI, AIReviewInitData)> Init((IAI, AIReviewInitData) initData) {
-        return new AsyncSharedDataWrapper<(IAI, AIReviewInitData)>(initData);
+    public static AsyncSharedDataWrapper<(IAI, AIReviewConfig)> Init((IAI, AIReviewConfig) initData) {
+        return new AsyncSharedDataWrapper<(IAI, AIReviewConfig)>(initData);
     }
 
-    public static void Final(AsyncSharedDataWrapper<(IAI, AIReviewInitData)> sharedData, Logger2Event? logger) { }
+    public static void Final(AsyncSharedDataWrapper<(IAI, AIReviewConfig)> sharedData, Logger2Event? logger) { }
 
     public async Task<List<Certificate>> ProcessData(MessageData data,
-        AsyncSharedDataWrapper<(IAI, AIReviewInitData)> sharedData, Logger2Event? logger) {
+        AsyncSharedDataWrapper<(IAI, AIReviewConfig)> sharedData, Logger2Event? logger) {
         var messages = data.MessageChain;
         var groupUin = messages.GroupUin!.Value;
         var memberUin = messages.FriendUin;
 
-        var inRange = await sharedData.ExecuteAsync(reference => {
-            var (ai, aiReviewInitData) = reference.Value;
-            return Task.FromResult(aiReviewInitData.GroupDic.TryGetValue(groupUin, out var value) &&
-                                   value.Contains(memberUin));
-        });
-
-        if (!inRange) {
+        var config = await sharedData.ExecuteAsync(reference => Task.FromResult(reference.Value.Item2));
+        if (!Utils.Util.CheckGroupMemberPermission(config, groupUin, memberUin)) {
             return [];
         }
 

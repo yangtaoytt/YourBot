@@ -5,35 +5,35 @@ using Fuwafuwa.Core.ServiceCore.Level3;
 using Fuwafuwa.Core.Subjects;
 using Lagrange.Core.Message;
 using MySql.Data.MySqlClient;
+using YourBot.Config.Implement.Level1;
+using YourBot.Config.Implement.Level1.Service.Group.Command;
 using YourBot.Fuwafuwa.Application.Attribute.Executor;
 using YourBot.Fuwafuwa.Application.Attribute.Processor;
 using YourBot.Fuwafuwa.Application.Data.ExecutorData;
-using YourBot.Fuwafuwa.Application.Data.InitData.Group.Command;
 using YourBot.Fuwafuwa.Application.Data.ProcessorData;
+using YourBot.Utils;
 
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group.Command;
 
-public class VersionProcessor : IProcessorCore<CommandData, NullSharedDataWrapper<VersionInitData>, VersionInitData> {
+public class VersionProcessor : IProcessorCore<CommandData, NullSharedDataWrapper<(VersionConfig versionConfig, DatabaseConfig databaseConfig)>, (VersionConfig versionConfig, DatabaseConfig databaseConfig)> {
     public static IServiceAttribute<CommandData> GetServiceAttribute() {
         return ReadGroupCommandAttribute.GetInstance();
     }
 
-    public static NullSharedDataWrapper<VersionInitData> Init(VersionInitData initData) {
-        return new NullSharedDataWrapper<VersionInitData>(initData);
+    public static NullSharedDataWrapper<(VersionConfig versionConfig, DatabaseConfig databaseConfig)> Init((VersionConfig versionConfig, DatabaseConfig databaseConfig) initData) {
+        return new NullSharedDataWrapper<(VersionConfig versionConfig, DatabaseConfig databaseConfig)>(initData);
     }
 
-    public static void Final(NullSharedDataWrapper<VersionInitData> sharedData, Logger2Event? logger) { }
+    public static void Final(NullSharedDataWrapper<(VersionConfig versionConfig, DatabaseConfig databaseConfig)> sharedData, Logger2Event? logger) { }
 
     public async Task<List<Certificate>> ProcessData(CommandData data,
-        NullSharedDataWrapper<VersionInitData> sharedData, Logger2Event? logger) {
+        NullSharedDataWrapper<(VersionConfig versionConfig, DatabaseConfig databaseConfig)> sharedData, Logger2Event? logger) {
         await Task.CompletedTask;
 
-        var initData = sharedData.Execute(initData => initData.Value);
+        var configs = sharedData.Execute(initData => initData.Value);
 
         var groupUin = data.GroupUin;
-        var memberUin = data.MessageChain.FriendUin;
-        var groupDic = initData.GroupDic;
-        if (!groupDic.TryGetValue(groupUin, out var value) || !value.Contains(memberUin)) {
+        if (!Util.CheckSimpleGroupPermission(configs.versionConfig, groupUin)) {
             return [];
         }
 
@@ -42,14 +42,14 @@ public class VersionProcessor : IProcessorCore<CommandData, NullSharedDataWrappe
             return [];
         }
 
-        var queryResult = QueryLastVersion(initData.ConnectionString);
+        var queryResult = QueryLastVersion(configs.databaseConfig.ConnectionString);
         var reply = "Version: " + queryResult.versionNumber + "\n" +
                     "Update Time: " + queryResult.updateTime + "\n" +
                     "Description: " + queryResult.versionDescrption;
 
         var groupMessageChain = MessageBuilder.Group(data.MessageChain.GroupUin!.Value).Text(reply).Build();
         var sendGroupMessageData =
-            new SendToGroupMessageData(new Priority(initData.Priority, PriorityStrategy.Share), groupMessageChain);
+            new SendToGroupMessageData(new Priority(configs.versionConfig.Priority, PriorityStrategy.Share), groupMessageChain);
 
         return [
             CanSendGroupMessageAttribute.GetInstance().GetCertificate(sendGroupMessageData)

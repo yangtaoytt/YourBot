@@ -3,23 +3,23 @@ using Lagrange.Core.Common.Interface.Api;
 using Microsoft.Extensions.Logging;
 using QRCoder;
 using YourBot.Config.Implement;
+using YourBot.Config.Implement.Level1;
 using YourBot.Logger;
 
 namespace YourBot.Login;
 
 public enum LoginType {
     QrCode,
-    KeyStore
+    Keystore
 }
 
 public interface ILoginStrategy {
-    Task<bool> Login(BotDeviceInfoAgentConfig deviceInfo, BotKeystoreAgentConfig keystore, MainConfig mainConfig,
+    Task<bool> Login(BotDeviceInfoAgentConfig deviceInfo, BotKeyStoreAgentConfig keystore,
         BotContext botContext, AppLogger appLogger);
 }
 
 public class QrCodeLogin : ILoginStrategy {
-    public async Task<bool> Login(BotDeviceInfoAgentConfig deviceInfo, BotKeystoreAgentConfig keystore,
-        MainConfig mainConfig,
+    public async Task<bool> Login(BotDeviceInfoAgentConfig deviceInfo, BotKeyStoreAgentConfig keystore,
         BotContext botContext, AppLogger appLogger) {
         appLogger.FromModule(LogSource.YourBot).LogInformation("Begin to login with QRCode...");
         var qrCodeInfo = await botContext.FetchQrCode();
@@ -40,18 +40,16 @@ public class QrCodeLogin : ILoginStrategy {
         appLogger.FromModule(LogSource.YourBot).LogInformation("Login success!");
 
         keystore.BotKeystore = botContext.UpdateKeystore();
-        mainConfig.Configurations["KeystoreConfig"] = "keystore.json";
         return true;
     }
 }
 
 public class KeyStoreLogin : ILoginStrategy {
-    public async Task<bool> Login(BotDeviceInfoAgentConfig deviceInfo, BotKeystoreAgentConfig keystore,
-        MainConfig mainConfig,
+    public async Task<bool> Login(BotDeviceInfoAgentConfig deviceInfo, BotKeyStoreAgentConfig keystore,
         BotContext botContext, AppLogger appLogger) {
         appLogger.FromModule(LogSource.YourBot).LogInformation("Begin to login with KeyStore...");
 
-        if (deviceInfo.DeviceInfo == null || keystore.BotKeystore == null) {
+        if (deviceInfo.BotDeviceInfo == null || keystore.BotKeystore == null) {
             throw new ArgumentNullException(nameof(deviceInfo), "DeviceInfo or Keystore is null");
         }
 
@@ -60,17 +58,11 @@ public class KeyStoreLogin : ILoginStrategy {
             return true;
         }
 
+        deviceInfo.BotDeviceInfo = null;
         keystore.BotKeystore = null;
-        deviceInfo.DeviceInfo = null;
-        try {
-            File.Delete(mainConfig.Configurations["KeystoreConfig"]);
-            File.Delete(mainConfig.Configurations["DeviceInfoConfig"]);
-            mainConfig.Configurations["KeystoreConfig"] = "";
-            mainConfig.Configurations["DeviceInfoConfig"] = "";
-        } catch {
-            appLogger.FromModule(LogSource.YourBot)
-                .LogCritical("Failed to delete keystore or deviceInfo, Please delete it manually.");
-        }
+
+        appLogger.FromModule(LogSource.YourBot)
+            .LogCritical("Failed to login by current keystore and deviceInfo.");
 
         return false;
     }

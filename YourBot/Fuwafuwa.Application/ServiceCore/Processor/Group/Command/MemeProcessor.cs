@@ -8,79 +8,29 @@ using Lagrange.Core.Common.Interface.Api;
 using Lagrange.Core.Message;
 using Lagrange.Core.Message.Entity;
 using MySql.Data.MySqlClient;
+using YourBot.Config.Implement.Level1;
+using YourBot.Config.Implement.Level1.Service.Group.Command;
 using YourBot.Fuwafuwa.Application.Attribute.Executor;
 using YourBot.Fuwafuwa.Application.Attribute.Processor;
 using YourBot.Fuwafuwa.Application.Data.ExecutorData;
-using YourBot.Fuwafuwa.Application.Data.InitData.Group.Command;
 using YourBot.Fuwafuwa.Application.Data.ProcessorData;
 using YourBot.Utils;
 
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group.Command;
 
 public class MemeProcessor : IProcessorCore<CommandData,
-    AsyncSharedDataWrapper<(BotContext botContext, MemeInitData memeInitData)>, (BotContext botContext, MemeInitData
-    memeInitData)> {
+    AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
+        configs)>, (BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
+    configs)> {
     public static IServiceAttribute<CommandData> GetServiceAttribute() {
         return ReadGroupCommandAttribute.GetInstance();
     }
 
-    public static AsyncSharedDataWrapper<(BotContext botContext, MemeInitData memeInitData)> Init(
-        (BotContext botContext, MemeInitData memeInitData) initData) {
-        return new AsyncSharedDataWrapper<(BotContext botContext, MemeInitData memeInitData)>(initData);
-    }
-
-    public static void Final(AsyncSharedDataWrapper<(BotContext botContext, MemeInitData memeInitData)> sharedData,
-        Logger2Event? logger) { }
-
-    public async Task<List<Certificate>> ProcessData(CommandData data,
-        AsyncSharedDataWrapper<(BotContext botContext, MemeInitData memeInitData)> sharedData, Logger2Event? logger) {
-        var groupUin = data.GroupUin;
-        var memberUin = data.MessageChain.FriendUin;
-
-        var inRage = await sharedData.ExecuteAsync(reference => {
-            var value = reference.Value;
-            return Task.FromResult(value.memeInitData.GroupDic.ContainsKey(groupUin) &&
-                                   value.memeInitData.GroupDic[groupUin].Contains(memberUin));
-        });
-        if (!inRage) {
-            return [];
-        }
-
-        var command = data.Command;
-        if (command != "meme") {
-            return [];
-        }
-
-        var parameters = data.Parameters;
-        var initData = await sharedData.ExecuteAsync(reference => Task.FromResult(reference.Value.memeInitData));
-        if (parameters.Count == 0) {
-            return [
-                CanSendGroupMessageAttribute.GetInstance()
-                    .GetCertificate(Util.BuildSendToGroupMessageData(
-                        data.GroupUin, initData.Priority, "wrong parameters"))
-            ];
-        }
-
-        var parameter = parameters[0];
-        if (parameters[0] == "save") {
-            return await SaveMeme(data, sharedData, initData);
-        }
-
-        if (parameters[0] == "get") {
-            return await GetMeme(data, sharedData, initData);
-        }
-
-        return [
-            CanSendGroupMessageAttribute.GetInstance()
-                .GetCertificate(Util.BuildSendToGroupMessageData(
-                    data.GroupUin, initData.Priority, "wrong parameters"))
-        ];
-    }
-
     private static async Task<List<Certificate>> GetMeme(CommandData data,
-        AsyncSharedDataWrapper<(BotContext botContext, MemeInitData memeInitData)> sharedData, MemeInitData initData) {
+        AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
+            configs)> sharedData, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs) {
         try {
-            await using var conn = new MySqlConnection(initData.ConnectionString);
+            await using var conn = new MySqlConnection(configs.databaseConfig.ConnectionString);
             await conn.OpenAsync();
 
             // Get random meme
@@ -91,7 +41,7 @@ public class MemeProcessor : IProcessorCore<CommandData,
                     return [
                         CanSendGroupMessageAttribute.GetInstance()
                             .GetCertificate(
-                                Util.BuildSendToGroupMessageData(data.GroupUin, initData.Priority, "No memes found"))
+                                Util.BuildSendToGroupMessageData(data.GroupUin, configs.memeConfig.Priority, "No memes found"))
                     ];
                 }
 
@@ -157,7 +107,7 @@ public class MemeProcessor : IProcessorCore<CommandData,
                 CanSendGroupMessageAttribute.GetInstance()
                     .GetCertificate(
                         new SendToGroupMessageData(
-                            new Priority(initData.Priority, PriorityStrategy.Share),
+                            new Priority(configs.memeConfig.Priority, PriorityStrategy.Share),
                             messageBuilder.Build()
                         )
                     )
@@ -166,21 +116,22 @@ public class MemeProcessor : IProcessorCore<CommandData,
             return [
                 CanSendGroupMessageAttribute.GetInstance()
                     .GetCertificate(
-                        Util.BuildSendToGroupMessageData(data.GroupUin, initData.Priority, $"Error: {ex.Message}")
+                        Util.BuildSendToGroupMessageData(data.GroupUin, configs.memeConfig.Priority, $"Error: {ex.Message}")
                     )
             ];
         }
     }
 
     private static async Task<List<Certificate>> SaveMeme(CommandData data,
-        AsyncSharedDataWrapper<(BotContext botContext, MemeInitData memeInitData)> sharedData, MemeInitData initData) {
+        AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
+            configs)> sharedData, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs) {
         var messageChain = data.MessageChain;
 
         if (messageChain[0] is not ForwardEntity forwardEntity) {
             return [
                 CanSendGroupMessageAttribute.GetInstance()
                     .GetCertificate(Util.BuildSendToGroupMessageData(
-                        data.GroupUin, initData.Priority, "wrong parameters type"))
+                        data.GroupUin, configs.memeConfig.Priority, "wrong parameters type"))
             ];
         }
 
@@ -188,12 +139,12 @@ public class MemeProcessor : IProcessorCore<CommandData,
             data.GroupUin,
             forwardEntity.Sequence, forwardEntity.Sequence)))![0];
 
-        await SaveMeme(targetMessageChain, initData.ConnectionString, initData.ImageDir);
+        await SaveMeme(targetMessageChain, configs.databaseConfig.ConnectionString, configs.memeConfig.ImageDir);
 
         return [
             CanSendGroupMessageAttribute.GetInstance()
                 .GetCertificate(Util.BuildSendToGroupMessageData(
-                    data.GroupUin, initData.Priority, "save successfully"))
+                    data.GroupUin, configs.memeConfig.Priority, "save successfully"))
         ];
     }
 
@@ -275,9 +226,57 @@ public class MemeProcessor : IProcessorCore<CommandData,
             }
 
             await transaction.CommitAsync();
-        } catch (Exception e) {
+        } catch (Exception) {
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    public static AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs)> Init(
+        (BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs) initData) {
+        return new AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig
+            databaseConfig) configs)>(initData);
+    }
+
+    public static void Final(AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs)> sharedData, Logger2Event? logger) { }
+    public async Task<List<Certificate>> ProcessData(CommandData data, AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs)> sharedData, Logger2Event? logger) {
+        var groupUin = data.GroupUin;
+        
+        var configs = await sharedData.ExecuteAsync(reference => Task.FromResult(reference.Value.configs));
+
+        var hasPermission = Utils.Util.CheckSimpleGroupPermission(configs.memeConfig, groupUin);
+        if (!hasPermission) {
+            return [];
+        }
+
+        var command = data.Command;
+        if (command != "meme") {
+            return [];
+        }
+
+        var parameters = data.Parameters;
+        
+        if (parameters.Count == 0) {
+            return [
+                CanSendGroupMessageAttribute.GetInstance()
+                    .GetCertificate(Util.BuildSendToGroupMessageData(
+                        data.GroupUin, configs.memeConfig.Priority, "wrong parameters"))
+            ];
+        }
+
+        var parameter = parameters[0];
+        if (parameters[0] == "save") {
+            return await SaveMeme(data, sharedData, configs);
+        }
+
+        if (parameters[0] == "get") {
+            return await GetMeme(data, sharedData, configs);
+        }
+
+        return [
+            CanSendGroupMessageAttribute.GetInstance()
+                .GetCertificate(Util.BuildSendToGroupMessageData(
+                    data.GroupUin, configs.memeConfig.Priority, "wrong parameters"))
+        ];
     }
 }

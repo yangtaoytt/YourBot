@@ -7,10 +7,10 @@ using Lagrange.Core;
 using Lagrange.Core.Common.Entity;
 using Lagrange.Core.Common.Interface.Api;
 using Microsoft.Extensions.Logging;
+using YourBot.Config.Implement.Level1.Service.Group;
 using YourBot.Fuwafuwa.Application.Attribute.Executor;
 using YourBot.Fuwafuwa.Application.Attribute.Processor;
 using YourBot.Fuwafuwa.Application.Data.ExecutorData;
-using YourBot.Fuwafuwa.Application.Data.InitData.Group;
 using YourBot.Fuwafuwa.Application.Data.ProcessorData;
 using YourBot.Logger;
 using YourBot.Utils;
@@ -18,45 +18,45 @@ using YourBot.Utils;
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group;
 
 public class GroupMessageLogProcessor : IProcessorCore<MessageData,
-    AsyncSharedDataWrapper<(AppLogger appLogger, BotContext botContext, GroupMessageLogInitData logInitData,
+    AsyncSharedDataWrapper<(AppLogger appLogger, BotContext botContext, GroupMessageLogConfig logInitData,
         Dictionary<uint, (BotGroup botGroup, List<BotGroupMember>? groupMembers)> groupDic)>, (AppLogger appLogger,
-    BotContext botContext, GroupMessageLogInitData logInitData)> {
+    BotContext botContext, GroupMessageLogConfig logInitData)> {
     public static IServiceAttribute<MessageData> GetServiceAttribute() {
         return ReadGroupQMessageAttribute.GetInstance();
     }
 
     public static
-        AsyncSharedDataWrapper<(AppLogger appLogger, BotContext botContext, GroupMessageLogInitData logInitData,
+        AsyncSharedDataWrapper<(AppLogger appLogger, BotContext botContext, GroupMessageLogConfig logInitData,
             Dictionary<uint, (BotGroup botGroup, List<BotGroupMember>? groupMembers)> groupDic)> Init(
-            (AppLogger appLogger, BotContext botContext, GroupMessageLogInitData logInitData) initData) {
+            (AppLogger appLogger, BotContext botContext, GroupMessageLogConfig logInitData) initData) {
         var task = initData.botContext.FetchGroups();
         task.Wait();
         var groupList = task.Result;
         var groupDic = groupList.ToDictionary(item => item.GroupUin,
             item => (item, (List<BotGroupMember>?)null));
-        return new AsyncSharedDataWrapper<(AppLogger appLogger, BotContext botContext, GroupMessageLogInitData
+        return new AsyncSharedDataWrapper<(AppLogger appLogger, BotContext botContext, GroupMessageLogConfig
             logInitData, Dictionary<uint, (BotGroup botGroup, List<BotGroupMember>? groupMembers)> groupDic)>(
             (initData.appLogger, initData.botContext, initData.logInitData, groupDic));
     }
 
     public static void Final(
-        AsyncSharedDataWrapper<(AppLogger appLogger, BotContext botContext, GroupMessageLogInitData logInitData,
+        AsyncSharedDataWrapper<(AppLogger appLogger, BotContext botContext, GroupMessageLogConfig logInitData,
             Dictionary<uint, (BotGroup botGroup, List<BotGroupMember>? groupMembers)> groupDic)> sharedData,
         Logger2Event? logger) { }
 
     public async Task<List<Certificate>> ProcessData(MessageData data,
-        AsyncSharedDataWrapper<(AppLogger appLogger, BotContext botContext, GroupMessageLogInitData logInitData,
+        AsyncSharedDataWrapper<(AppLogger appLogger, BotContext botContext, GroupMessageLogConfig logInitData,
             Dictionary<uint, (BotGroup botGroup, List<BotGroupMember>? groupMembers)> groupDic)> sharedData,
         Logger2Event? logger) {
-        var inRange = await sharedData.ExecuteAsync(reference =>
-            Task.FromResult(reference.Value.logInitData.GroupList.Contains(data.MessageChain.GroupUin!.Value)));
-
-        if (!inRange) {
-            return [];
-        }
 
         var messageChain = data.MessageChain;
         var groupUin = messageChain.GroupUin!.Value;
+        
+        var config = await sharedData.ExecuteAsync(reference => Task.FromResult(reference.Value.logInitData));
+        if (!Utils.Util.CheckSimpleGroupPermission(config, groupUin)) {
+            return [];
+        }
+
 
         var (group, member) = await sharedData.ExecuteAsync(async reference => {
             var value = reference.Value;

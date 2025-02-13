@@ -4,6 +4,7 @@ using Fuwafuwa.Core.Env;
 using Fuwafuwa.Core.Log;
 using Fuwafuwa.Core.Log.LogEventArgs.Interface;
 using Lagrange.Core;
+using Lagrange.Core.Common;
 using Lagrange.Core.Common.Entity;
 using Lagrange.Core.Event;
 using Microsoft.Extensions.Logging;
@@ -11,10 +12,12 @@ using YourBot.AI.Implement;
 using YourBot.AI.Interface;
 using YourBot.Config;
 using YourBot.Config.Implement;
+using YourBot.Config.Implement.Level1;
+using YourBot.Config.Implement.Level1.Service;
+using YourBot.Config.Implement.Level1.Service.Group;
+using YourBot.Config.Implement.Level1.Service.Group.Command;
 using YourBot.Factory;
 using YourBot.Fuwafuwa.Application.Data.ExecutorData;
-using YourBot.Fuwafuwa.Application.Data.InitData.Group;
-using YourBot.Fuwafuwa.Application.Data.InitData.Group.Command;
 using YourBot.Fuwafuwa.Application.Data.ProcessorData;
 using YourBot.Fuwafuwa.Application.ServiceCore.Executor;
 using YourBot.Fuwafuwa.Application.ServiceCore.Input;
@@ -33,7 +36,7 @@ public class BotApplication : IDisposable {
     private const int NameMaxWidth = 25; // > 3
     private const int ModuleMaxWidth = 12; // > 3
     private readonly AppConfig _appConfig;
-    private readonly AppInfoAgentConfig _appInfo;
+    private readonly BotAppInfoAgentConfig _botAppInfo;
     private readonly AppLogger _appLogger;
     private readonly BotConfigAgentConfig _botConfig;
 
@@ -43,47 +46,72 @@ public class BotApplication : IDisposable {
 
 
     private readonly BotDeviceInfoAgentConfig _deviceInfo;
-    private readonly BotKeystoreAgentConfig _keystore;
+    private readonly BotKeyStoreAgentConfig _keystore;
     private readonly ILoginStrategy _loginStrategy;
 
     private ServiceManager? _serviceManager;
 
     public BotApplication(string mainConfigPath) {
+        if (!CheckConfig(mainConfigPath)) {
+            throw new Exception("Config file not found, default config generated.Please fill in the config file.");
+        }
+        
         _configManager = new ConfigManager(mainConfigPath);
 
-        _appConfig = _configManager.CreateConfig<AppConfig>();
+        _appConfig = _configManager.ReadConfig<AppConfig>();
+        _botAppInfo = _configManager.ReadConfig<BotAppInfoAgentConfig>();
         if (_appConfig.LoginType == LoginType.QrCode) {
             var task = LoginSigner.CreateAppInfoAsync(_appConfig.SignServerUrl,
                 _appConfig.SignProxyUrl);
             task.Wait();
-            _appInfo = new AppInfoAgentConfig(task.Result);
-            _configManager.MainConfig.Configurations["AppInfoConfig"] = "AppInfoConfig.json";
-        } else if (_appConfig.LoginType == LoginType.KeyStore) {
-            _appInfo = _configManager.CreateConfig<AppInfoAgentConfig>();
-        } else {
-            throw new Exception("Login type not supported");
+            _botAppInfo.BotAppInfo = task.Result;
         }
 
-        _deviceInfo = _configManager.CreateConfig<BotDeviceInfoAgentConfig>();
-        _keystore = _configManager.CreateConfig<BotKeystoreAgentConfig>();
-        _botConfig = _configManager.CreateConfig<BotConfigAgentConfig>();
+        _deviceInfo = _configManager.ReadConfig<BotDeviceInfoAgentConfig>();
+        _keystore = _configManager.ReadConfig<BotKeyStoreAgentConfig>();
+        _botConfig = _configManager.ReadConfig<BotConfigAgentConfig>();
 
-        var appFactory = new AppFactory(_appConfig, _appInfo, _deviceInfo, _botConfig, _keystore,
-            _configManager.MainConfig);
+        var appFactory = new AppFactory(_appConfig, _botAppInfo, _deviceInfo, _botConfig, _keystore);
         _appLogger = appFactory.CreateAppLogger();
         _loginStrategy = appFactory.CreateLoginStrategy();
         _botContext = appFactory.CreateBotContext();
     }
 
-    public void Dispose() {
-        _serviceManager!.Env.Close();
+    private static bool CheckConfig(string mainConfigPath) {
+        if (File.Exists(mainConfigPath)) {
+            return true;
+        }
+        ConfigManager.SignDefaultConfig<AppConfig>();
+        ConfigManager.SignDefaultConfig<BotAppInfoAgentConfig>();
+        ConfigManager.SignDefaultConfig<BotConfigAgentConfig>();
+        ConfigManager.SignDefaultConfig<BotDeviceInfoAgentConfig>();
+        ConfigManager.SignDefaultConfig<BotKeyStoreAgentConfig>();
+        ConfigManager.SignDefaultConfig<DatabaseConfig>();
+        
+        ConfigManager.SignDefaultConfig<ServiceManagerConfig>();
 
-        _configManager.WriteMainConfig();
+        ConfigManager.SignDefaultConfig<AIReviewConfig>();
+        ConfigManager.SignDefaultConfig<AntiPlusOneConfig>();
+        ConfigManager.SignDefaultConfig<GlobalGroupActiveConfig>();
+        ConfigManager.SignDefaultConfig<GroupMessageLogConfig>();
+
+        ConfigManager.SignDefaultConfig<MemeConfig>();
+        ConfigManager.SignDefaultConfig<PingPongConfig>();
+        ConfigManager.SignDefaultConfig<ServiceRunConfig>();
+        ConfigManager.SignDefaultConfig<VersionConfig>();
+
+        ConfigManager.GenerateDefaultConfigOnDisk(Path.Combine(".", "MainConfig.json"));
+        return false;
+    }
+
+    public void Dispose() {
+        _serviceManager?.Env.Close();
+        
         _configManager.WriteConfig(_appConfig);
         _configManager.WriteConfig(_deviceInfo);
         _configManager.WriteConfig(_keystore);
         _configManager.WriteConfig(_botConfig);
-        _configManager.WriteConfig(_appInfo);
+        _configManager.WriteConfig(_botAppInfo);
     }
 
     public async Task Run() {
@@ -94,7 +122,7 @@ public class BotApplication : IDisposable {
             _appLogger.FromModule(LogSource.Lagrange).Log(Util.LogLevelConvert(e.Level), e.EventMessage);
         };
 
-        if (!await _loginStrategy.Login(_deviceInfo, _keystore, _configManager.MainConfig, _botContext, _appLogger)) {
+        if (!await _loginStrategy.Login(_deviceInfo, _keystore, _botContext, _appLogger)) {
             return;
         }
 
@@ -122,7 +150,7 @@ public class BotApplication : IDisposable {
         logger2Event.DebugLogGenerated += (sender, e) => { OutputHandler(LogLevel.Debug, sender, e, _appLogger); };
 
 
-        _serviceManager = new ServiceManager(_configManager.CreateConfig<ServiceManagerConfig>(),
+        _serviceManager = new ServiceManager(_configManager.ReadConfig<ServiceManagerConfig>(),
             new Env(serviceCount, logger2Event));
 
         var inputHandler =
@@ -134,43 +162,45 @@ public class BotApplication : IDisposable {
 
 
         await _serviceManager.SignProcessor<GroupEventProcessor, GroupEventData,
-            SimpleSharedDataWrapper<GroupEventInitData>, GroupEventInitData>(ServiceName.GroupEventProcessor,
+            SimpleSharedDataWrapper<GlobalGroupActiveConfig>, GlobalGroupActiveConfig>(ServiceName.GroupEventProcessor,
             _configManager
-                .CreateConfig<GroupEventInitData>());
+                .ReadConfig<GlobalGroupActiveConfig>());
         await _serviceManager.SignProcessor<GroupMessageLogProcessor, MessageData,
-            AsyncSharedDataWrapper<(AppLogger, BotContext, GroupMessageLogInitData,
+            AsyncSharedDataWrapper<(AppLogger, BotContext, GroupMessageLogConfig,
                 Dictionary<uint, (BotGroup, List<BotGroupMember>?)>)>, (AppLogger, BotContext,
-            GroupMessageLogInitData)>(ServiceName.GroupMessageLogProcessor, (_appLogger, _botContext,
-            _configManager.CreateConfig<GroupMessageLogInitData>()));
+            GroupMessageLogConfig)>(ServiceName.GroupMessageLogProcessor, (_appLogger, _botContext,
+            _configManager.ReadConfig<GroupMessageLogConfig>()));
         await _serviceManager.SignProcessor<AIReviewProcessor, MessageData,
-            AsyncSharedDataWrapper<(IAI, AIReviewInitData)>, (IAI, AIReviewInitData)>(ServiceName.AIReviewProcessor,
+            AsyncSharedDataWrapper<(IAI, AIReviewConfig)>, (IAI, AIReviewConfig)>(ServiceName.AIReviewProcessor,
             (closeAi,
-                _configManager.CreateConfig<AIReviewInitData>()));
+                _configManager.ReadConfig<AIReviewConfig>()));
         await _serviceManager.SignProcessor<AntiPlusOneProcessor, MessageData,
-            NullSharedDataWrapper<AntiPlusOneInitData>, AntiPlusOneInitData>(ServiceName.AntiPlusOneProcessor,
-            _configManager.CreateConfig<AntiPlusOneInitData>());
+            NullSharedDataWrapper<AntiPlusOneConfig>, AntiPlusOneConfig>(ServiceName.AntiPlusOneProcessor,
+            _configManager.ReadConfig<AntiPlusOneConfig>());
 
         await _serviceManager.SignProcessor<GroupCommandProcessor, MessageData, NullSharedDataWrapper<(string, uint)>,
             BotContext>(ServiceName.GroupCommandProcessor, _botContext);
 
         await _serviceManager.SignProcessor<PingPongProcessor, CommandData,
-            NullSharedDataWrapper<PingPongInitData>, PingPongInitData>(ServiceName.PingPongProcessor,
-            _configManager.CreateConfig<PingPongInitData>());
-        await _serviceManager.SignProcessor<VersionProcessor, CommandData, NullSharedDataWrapper<VersionInitData>
-            , VersionInitData>(ServiceName.VersionProcessor, _configManager.CreateConfig<VersionInitData>());
+            NullSharedDataWrapper<PingPongConfig>, PingPongConfig>(ServiceName.PingPongProcessor,
+            _configManager.ReadConfig<PingPongConfig>());
+        await _serviceManager.SignProcessor<VersionProcessor, CommandData, NullSharedDataWrapper<(VersionConfig versionConfig, DatabaseConfig databaseConfig)>
+            , (VersionConfig versionConfig, DatabaseConfig databaseConfig)>(ServiceName.VersionProcessor,
+            (_configManager.ReadConfig<VersionConfig>(), _configManager.ReadConfig<DatabaseConfig>()));
         await _serviceManager.SignProcessor<MemeProcessor, CommandData,
-            AsyncSharedDataWrapper<(BotContext botContext, MemeInitData memeInitData)>, (BotContext botContext,
-            MemeInitData memeInitData)>(ServiceName.MemeProcessor,
-            (_botContext, _configManager.CreateConfig<MemeInitData>()));
+            AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
+                configs)>, (BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
+            configs)>(ServiceName.MemeProcessor,
+            (_botContext, (_configManager.ReadConfig<MemeConfig>(), _configManager.ReadConfig<DatabaseConfig>())));
         await _serviceManager
-            .SignProcessor<ServiceProcessor, CommandData,
+            .SignProcessor<ServiceRunProcessor, CommandData,
                 AsyncSharedDataWrapper<(Func<List<(ServiceName, bool)>> getStatusFunc, Func<ServiceName, Task<bool>>
-                    registerFunc, Func<ServiceName, Task<bool>> unregisterFunc, ServiceInitData)>, (
+                    registerFunc, Func<ServiceName, Task<bool>> unregisterFunc, ServiceRunConfig)>, (
                 Func<List<(ServiceName, bool)>> getStatusFunc, Func<ServiceName, Task<bool>> registerFunc,
-                Func<ServiceName, Task<bool>> unregisterFunc, ServiceInitData)>(
+                Func<ServiceName, Task<bool>> unregisterFunc, ServiceRunConfig)>(
                 ServiceName.ServiceProcessor,
                 (_serviceManager.GetServiceStatus, _serviceManager.RegisterService, _serviceManager.UnRegisterService,
-                    _configManager.CreateConfig<ServiceInitData>()));
+                    _configManager.ReadConfig<ServiceRunConfig>()));
 
 
         await _serviceManager.SignExecutor<SendGroupMessageExecutor, SendToGroupMessageData,

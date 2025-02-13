@@ -6,20 +6,21 @@ namespace YourBot.Factory;
 
 public partial class AppFactory {
     public BotContext CreateBotContext() {
+        BotContext? res;
         switch (_appConfig.LoginType) {
             case LoginType.QrCode:
                 if (_appConfig.Uin == null) {
                     throw new ArgumentNullException(nameof(_appConfig.Uin), "the Uin is required for QrCode login");
                 }
 
-                var res = BotFactory.Create(_botConfig, _appConfig.Uin.Value, "password",
-                    _botAppInfo, out var deviceInfo);
-                _botDeviceInfo.DeviceInfo = deviceInfo;
-                _mainConfig.Configurations["DeviceInfoConfig"] = "deviceinfo.json";
-                return res;
-            case LoginType.KeyStore:
-                if (_botDeviceInfo.DeviceInfo == null) {
-                    throw new ArgumentNullException(nameof(_botDeviceInfo.DeviceInfo),
+                res = BotFactory.Create(_botConfig.BotConfig, _appConfig.Uin.Value, "password",
+                    _botAppInfo.BotAppInfo!, out var deviceInfo);
+                _botDeviceInfo.BotDeviceInfo = deviceInfo;
+                _botConfig.BotConfig.CustomSignProvider = null;
+                break;
+            case LoginType.Keystore:
+                if (_botDeviceInfo.BotDeviceInfo == null) {
+                    throw new ArgumentNullException(nameof(_botDeviceInfo.BotDeviceInfo),
                         "the  DeviceInfo  is required for KeyStore login");
                 }
 
@@ -28,10 +29,13 @@ public partial class AppFactory {
                         "the Keystore is required for KeyStore login");
                 }
 
-                return BotFactory.Create(_botConfig, _botDeviceInfo.DeviceInfo, _botKeystore.BotKeystore,
-                    _botAppInfo);
+                res = BotFactory.Create(_botConfig.BotConfig, _botDeviceInfo.BotDeviceInfo, _botKeystore.BotKeystore,
+                    _botAppInfo.BotAppInfo!);
+               break;
             default:
                 throw new ArgumentOutOfRangeException();
         }
+        _botConfig.BotConfig.CustomSignProvider = null;
+        return res;
     }
 }

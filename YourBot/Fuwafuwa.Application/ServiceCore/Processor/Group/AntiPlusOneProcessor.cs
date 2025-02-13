@@ -4,38 +4,37 @@ using Fuwafuwa.Core.Log;
 using Fuwafuwa.Core.ServiceCore.Level3;
 using Fuwafuwa.Core.Subjects;
 using Lagrange.Core.Message;
+using YourBot.Config.Implement.Level1.Service.Group;
 using YourBot.Fuwafuwa.Application.Attribute.Executor;
 using YourBot.Fuwafuwa.Application.Attribute.Processor;
 using YourBot.Fuwafuwa.Application.Data.ExecutorData;
-using YourBot.Fuwafuwa.Application.Data.InitData.Group;
 using YourBot.Fuwafuwa.Application.Data.ProcessorData;
 
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group;
 
 public class
-    AntiPlusOneProcessor : IProcessorCore<MessageData, NullSharedDataWrapper<AntiPlusOneInitData>,
-    AntiPlusOneInitData> {
+    AntiPlusOneProcessor : IProcessorCore<MessageData, NullSharedDataWrapper<AntiPlusOneConfig>,
+    AntiPlusOneConfig> {
     private readonly Dictionary<uint, MessageChain> _groupMessages = [];
 
     public static IServiceAttribute<MessageData> GetServiceAttribute() {
         return ReadGroupQMessageAttribute.GetInstance();
     }
 
-    public static NullSharedDataWrapper<AntiPlusOneInitData> Init(AntiPlusOneInitData initData) {
-        return new NullSharedDataWrapper<AntiPlusOneInitData>(initData);
+    public static NullSharedDataWrapper<AntiPlusOneConfig> Init(AntiPlusOneConfig initData) {
+        return new NullSharedDataWrapper<AntiPlusOneConfig>(initData);
     }
 
-    public static void Final(NullSharedDataWrapper<AntiPlusOneInitData> sharedData, Logger2Event? logger) { }
+    public static void Final(NullSharedDataWrapper<AntiPlusOneConfig> sharedData, Logger2Event? logger) { }
 
     public async Task<List<Certificate>> ProcessData(MessageData data,
-        NullSharedDataWrapper<AntiPlusOneInitData> sharedData, Logger2Event? logger) {
+        NullSharedDataWrapper<AntiPlusOneConfig> sharedData, Logger2Event? logger) {
         await Task.CompletedTask;
 
         var groupUin = data.MessageChain.GroupUin!.Value;
 
-        var initData = sharedData.Execute(initData => initData.Value);
-        var groupList = initData.GroupList;
-        if (!groupList.Contains(groupUin)) {
+        var config = sharedData.Execute(initData => initData.Value);
+        if (!Utils.Util.CheckSimpleGroupPermission(config, groupUin)) {
             return [];
         }
 
@@ -66,7 +65,7 @@ public class
             randomString += "~";
         }
 
-        var imageBytes = await File.ReadAllBytesAsync(initData.ReplyImagePath);
+        var imageBytes = await File.ReadAllBytesAsync(config.ReplyImagePath);
 
         var groupMessageChain = MessageBuilder.Group(groupUin)
             .Image(imageBytes)

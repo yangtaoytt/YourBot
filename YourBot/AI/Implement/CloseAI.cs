@@ -80,7 +80,7 @@ public class CloseAI : IAI {
 
                 return new JudgeFriendlyResult(isFriendly, suggestion ?? "没有建议, 请自行判断");
             }
-        } catch (Exception e) {
+        } catch (Exception) {
             return new JudgeFriendlyResult(false, "我下班了，明天再来吧");
         }
     }

@@ -4,6 +4,7 @@ using Fuwafuwa.Core.Data.SharedDataWrapper.Level0;
 using Fuwafuwa.Core.Env;
 using Fuwafuwa.Core.ServiceCore.Level3;
 using YourBot.Config.Implement;
+using YourBot.Config.Implement.Level1.Service;
 
 namespace YourBot.ServiceManage;
 
@@ -106,20 +107,22 @@ public class ServiceManager {
     }
 
     public async Task<bool> UnRegisterService(ServiceName serviceName) {
-        if (_name2Type.ContainsKey(serviceName)) {
-            await Env.UnRegister(_name2Type[serviceName]);
-            return true;
+        if (!_name2Type.TryGetValue(serviceName, value: out var value)) {
+            return false;
         }
 
-        return false;
+        await Env.UnRegister(value);
+        return true;
+
     }
 
     public async Task<bool> RegisterService(ServiceName serviceName) {
-        if (_name2Type.ContainsKey(serviceName)) {
-            await Env.Register(_name2Type[serviceName]);
-            return true;
+        if (!_name2Type.TryGetValue(serviceName, value: out var value)) {
+            return false;
         }
 
-        return false;
+        await Env.Register(value);
+        return true;
+
     }
 }

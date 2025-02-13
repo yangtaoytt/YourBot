@@ -4,36 +4,35 @@ using Fuwafuwa.Core.Log;
 using Fuwafuwa.Core.ServiceCore.Level3;
 using Fuwafuwa.Core.Subjects;
 using Lagrange.Core.Message;
+using YourBot.Config.Implement.Level1.Service.Group.Command;
 using YourBot.Fuwafuwa.Application.Attribute.Executor;
 using YourBot.Fuwafuwa.Application.Attribute.Processor;
 using YourBot.Fuwafuwa.Application.Data.ExecutorData;
-using YourBot.Fuwafuwa.Application.Data.InitData.Group.Command;
 using YourBot.Fuwafuwa.Application.Data.ProcessorData;
 
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group.Command;
 
 public class
-    PingPongProcessor : IProcessorCore<CommandData, NullSharedDataWrapper<PingPongInitData>, PingPongInitData> {
+    PingPongProcessor : IProcessorCore<CommandData, NullSharedDataWrapper<PingPongConfig>, PingPongConfig> {
     public static IServiceAttribute<CommandData> GetServiceAttribute() {
         return ReadGroupCommandAttribute.GetInstance();
     }
 
-    public static NullSharedDataWrapper<PingPongInitData> Init(PingPongInitData initData) {
-        return new NullSharedDataWrapper<PingPongInitData>(initData);
+    public static NullSharedDataWrapper<PingPongConfig> Init(PingPongConfig initData) {
+        return new NullSharedDataWrapper<PingPongConfig>(initData);
     }
 
-    public static void Final(NullSharedDataWrapper<PingPongInitData> sharedData, Logger2Event? logger) { }
+    public static void Final(NullSharedDataWrapper<PingPongConfig> sharedData, Logger2Event? logger) { }
 
     public async Task<List<Certificate>> ProcessData(CommandData data,
-        NullSharedDataWrapper<PingPongInitData> sharedData, Logger2Event? logger) {
+        NullSharedDataWrapper<PingPongConfig> sharedData, Logger2Event? logger) {
         await Task.CompletedTask;
 
-        var initData = sharedData.Execute(initData => initData.Value);
+        var config = sharedData.Execute(initData => initData.Value);
 
         var groupUin = data.GroupUin;
         var memberUin = data.MessageChain.FriendUin;
-        var groupDic = initData.GroupDic;
-        if (!groupDic.TryGetValue(groupUin, out var value) || !value.Contains(memberUin)) {
+        if (!Utils.Util.CheckGroupMemberPermission(config, groupUin, memberUin)) {
             return [];
         }
 
@@ -45,7 +44,7 @@ public class
 
         var groupMessageChain = MessageBuilder.Group(groupUin).Text("pong").Build();
         var sendGroupMessageData =
-            new SendToGroupMessageData(new Priority(initData.Priority, PriorityStrategy.Share), groupMessageChain);
+            new SendToGroupMessageData(new Priority(config.Priority, PriorityStrategy.Share), groupMessageChain);
 
         return [
             CanSendGroupMessageAttribute.GetInstance().GetCertificate(sendGroupMessageData)
