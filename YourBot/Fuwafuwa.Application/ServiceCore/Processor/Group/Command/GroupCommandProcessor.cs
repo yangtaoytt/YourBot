@@ -12,7 +12,7 @@ namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group.Command;
 
 public class GroupCommandProcessor : IProcessorCore<MessageData, NullSharedDataWrapper<(string, uint)>, BotContext> {
     public static IServiceAttribute<MessageData> GetServiceAttribute() {
-        return ReadGroupQMessageAttribute.GetInstance();
+        return ReadGroupMessageAttribute.GetInstance();
     }
 
     public static NullSharedDataWrapper<(string, uint)> Init(BotContext initData) {

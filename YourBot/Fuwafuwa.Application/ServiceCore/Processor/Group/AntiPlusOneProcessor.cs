@@ -18,7 +18,7 @@ public class
     private readonly Dictionary<uint, MessageChain> _groupMessages = [];
 
     public static IServiceAttribute<MessageData> GetServiceAttribute() {
-        return ReadGroupQMessageAttribute.GetInstance();
+        return ReadGroupMessageAttribute.GetInstance();
     }
 
     public static NullSharedDataWrapper<AntiPlusOneConfig> Init(AntiPlusOneConfig initData) {

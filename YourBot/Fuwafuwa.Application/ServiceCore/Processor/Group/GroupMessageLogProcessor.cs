@@ -22,7 +22,7 @@ public class GroupMessageLogProcessor : IProcessorCore<MessageData,
         Dictionary<uint, (BotGroup botGroup, List<BotGroupMember>? groupMembers)> groupDic)>, (AppLogger appLogger,
     BotContext botContext, GroupMessageLogConfig logInitData)> {
     public static IServiceAttribute<MessageData> GetServiceAttribute() {
-        return ReadGroupQMessageAttribute.GetInstance();
+        return ReadGroupMessageAttribute.GetInstance();
     }
 
     public static

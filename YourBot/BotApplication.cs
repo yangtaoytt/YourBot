@@ -19,6 +19,7 @@ using YourBot.Config.Implement.Level1.Service.Group.Command;
 using YourBot.Factory;
 using YourBot.Fuwafuwa.Application.Data.ExecutorData;
 using YourBot.Fuwafuwa.Application.Data.ProcessorData;
+using YourBot.Fuwafuwa.Application.Distributor;
 using YourBot.Fuwafuwa.Application.ServiceCore.Executor;
 using YourBot.Fuwafuwa.Application.ServiceCore.Input;
 using YourBot.Fuwafuwa.Application.ServiceCore.Processor;
@@ -94,6 +95,7 @@ public class BotApplication : IDisposable {
         ConfigManager.SignDefaultConfig<AntiPlusOneConfig>();
         ConfigManager.SignDefaultConfig<GlobalGroupActiveConfig>();
         ConfigManager.SignDefaultConfig<GroupMessageLogConfig>();
+        ConfigManager.SignDefaultConfig<AntiFloodConfig>();
 
         ConfigManager.SignDefaultConfig<MemeConfig>();
         ConfigManager.SignDefaultConfig<PingPongConfig>();
@@ -157,43 +159,43 @@ public class BotApplication : IDisposable {
             await _serviceManager.SignInput<EventInput, EventBase, NullSharedDataWrapper<object>, object>(
                 ServiceName.EventInput, new object());
 
-        await _serviceManager.SignProcessor<EventRouterProcessor, EventData, NullSharedDataWrapper<object>,
+        await _serviceManager.SignPollingProcessor<EventRouterProcessor, EventData, NullSharedDataWrapper<object>,
             object>(ServiceName.EventRouterProcessor, new object());
 
 
-        await _serviceManager.SignProcessor<GroupEventProcessor, GroupEventData,
+        await _serviceManager.SignPollingProcessor<GroupEventProcessor, GroupEventData,
             SimpleSharedDataWrapper<GlobalGroupActiveConfig>, GlobalGroupActiveConfig>(ServiceName.GroupEventProcessor,
             _configManager
                 .ReadConfig<GlobalGroupActiveConfig>());
-        await _serviceManager.SignProcessor<GroupMessageLogProcessor, MessageData,
+        await _serviceManager.SignPollingProcessor<GroupMessageLogProcessor, MessageData,
             AsyncSharedDataWrapper<(AppLogger, BotContext, GroupMessageLogConfig,
                 Dictionary<uint, (BotGroup, List<BotGroupMember>?)>)>, (AppLogger, BotContext,
             GroupMessageLogConfig)>(ServiceName.GroupMessageLogProcessor, (_appLogger, _botContext,
             _configManager.ReadConfig<GroupMessageLogConfig>()));
-        await _serviceManager.SignProcessor<AIReviewProcessor, MessageData,
+        await _serviceManager.SignProcessor<AIReviewProcessor, MessageData, QQUinDistributor<AsyncSharedDataWrapper<(IAI, AIReviewConfig)>>,
             AsyncSharedDataWrapper<(IAI, AIReviewConfig)>, (IAI, AIReviewConfig)>(ServiceName.AIReviewProcessor,
             (closeAi,
                 _configManager.ReadConfig<AIReviewConfig>()));
-        await _serviceManager.SignProcessor<AntiPlusOneProcessor, MessageData,
+        await _serviceManager.SignPollingProcessor<AntiPlusOneProcessor, MessageData,
             NullSharedDataWrapper<AntiPlusOneConfig>, AntiPlusOneConfig>(ServiceName.AntiPlusOneProcessor,
             _configManager.ReadConfig<AntiPlusOneConfig>());
 
-        await _serviceManager.SignProcessor<GroupCommandProcessor, MessageData, NullSharedDataWrapper<(string, uint)>,
+        await _serviceManager.SignPollingProcessor<GroupCommandProcessor, MessageData, NullSharedDataWrapper<(string, uint)>,
             BotContext>(ServiceName.GroupCommandProcessor, _botContext);
 
-        await _serviceManager.SignProcessor<PingPongProcessor, CommandData,
+        await _serviceManager.SignPollingProcessor<PingPongProcessor, CommandData,
             NullSharedDataWrapper<PingPongConfig>, PingPongConfig>(ServiceName.PingPongProcessor,
             _configManager.ReadConfig<PingPongConfig>());
-        await _serviceManager.SignProcessor<VersionProcessor, CommandData, NullSharedDataWrapper<(VersionConfig versionConfig, DatabaseConfig databaseConfig)>
+        await _serviceManager.SignPollingProcessor<VersionProcessor, CommandData, NullSharedDataWrapper<(VersionConfig versionConfig, DatabaseConfig databaseConfig)>
             , (VersionConfig versionConfig, DatabaseConfig databaseConfig)>(ServiceName.VersionProcessor,
             (_configManager.ReadConfig<VersionConfig>(), _configManager.ReadConfig<DatabaseConfig>()));
-        await _serviceManager.SignProcessor<MemeProcessor, CommandData,
+        await _serviceManager.SignPollingProcessor<MemeProcessor, CommandData,
             AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
                 configs)>, (BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
             configs)>(ServiceName.MemeProcessor,
             (_botContext, (_configManager.ReadConfig<MemeConfig>(), _configManager.ReadConfig<DatabaseConfig>())));
         await _serviceManager
-            .SignProcessor<ServiceRunProcessor, CommandData,
+            .SignPollingProcessor<ServiceRunProcessor, CommandData,
                 AsyncSharedDataWrapper<(Func<List<(ServiceName, bool)>> getStatusFunc, Func<ServiceName, Task<bool>>
                     registerFunc, Func<ServiceName, Task<bool>> unregisterFunc, ServiceRunConfig)>, (
                 Func<List<(ServiceName, bool)>> getStatusFunc, Func<ServiceName, Task<bool>> registerFunc,
@@ -201,6 +203,9 @@ public class BotApplication : IDisposable {
                 ServiceName.ServiceProcessor,
                 (_serviceManager.GetServiceStatus, _serviceManager.RegisterService, _serviceManager.UnRegisterService,
                     _configManager.ReadConfig<ServiceRunConfig>()));
+        await _serviceManager
+            .SignProcessor<AntiFloodProcessor, MessageData, QQUinDistributor<NullSharedDataWrapper<AntiFloodConfig>>,
+                NullSharedDataWrapper<AntiFloodConfig>, AntiFloodConfig>(ServiceName.AntiFloodProcessor,_configManager.ReadConfig<AntiFloodConfig>());
 
 
         await _serviceManager.SignExecutor<SendGroupMessageExecutor, SendToGroupMessageData,
@@ -209,6 +214,9 @@ public class BotApplication : IDisposable {
             , AppLogger>(ServiceName.LogToConsoleExecutor, _appLogger);
         await _serviceManager.SignExecutor<RevokeGroupMessageExecutor, RevokeGroupMessageData,
             AsyncSharedDataWrapper<BotContext>, BotContext>(ServiceName.RevokeGroupMessageExecutor, _botContext);
+        await _serviceManager
+            .SignExecutor<MuteGroupMemberExecutor, MuteGroupMemberData, AsyncSharedDataWrapper<BotContext>, BotContext>(
+                ServiceName.MuteGroupMemberExecutor, _botContext);
 
 
         _botContext.Invoker.OnGroupMessageReceived += (sender, e) => { inputHandler.Input(e); };

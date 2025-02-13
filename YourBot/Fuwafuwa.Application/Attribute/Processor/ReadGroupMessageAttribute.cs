@@ -3,4 +3,4 @@ using YourBot.Fuwafuwa.Application.Data.ProcessorData;
 
 namespace YourBot.Fuwafuwa.Application.Attribute.Processor;
 
-public class ReadGroupQMessageAttribute : IProcessorAttribute<ReadGroupQMessageAttribute, MessageData>;
+public class ReadGroupMessageAttribute : IProcessorAttribute<ReadGroupMessageAttribute, MessageData>;

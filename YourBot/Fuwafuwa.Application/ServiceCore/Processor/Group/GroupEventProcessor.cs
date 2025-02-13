@@ -33,7 +33,7 @@ public class GroupEventProcessor : IProcessorCore<GroupEventData, SimpleSharedDa
 
         var messageData = new MessageData(messageChain);
         return [
-            ReadGroupQMessageAttribute.GetInstance().GetCertificate(messageData)
+            ReadGroupMessageAttribute.GetInstance().GetCertificate(messageData)
         ];
     }
 }

@@ -23,7 +23,7 @@ public class AIReviewProcessor : IProcessorCore<MessageData, AsyncSharedDataWrap
         _memberMessages = [];
 
     public static IServiceAttribute<MessageData> GetServiceAttribute() {
-        return ReadGroupQMessageAttribute.GetInstance();
+        return ReadGroupMessageAttribute.GetInstance();
     }
 
     public static AsyncSharedDataWrapper<(IAI, AIReviewConfig)> Init((IAI, AIReviewConfig) initData) {

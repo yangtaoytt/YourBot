@@ -1,8 +1,13 @@
 using Fuwafuwa.Core.Container.Level3;
 using Fuwafuwa.Core.Data.ServiceData.Level1;
 using Fuwafuwa.Core.Data.SharedDataWrapper.Level0;
+using Fuwafuwa.Core.Data.SharedDataWrapper.Level2;
+using Fuwafuwa.Core.Data.SubjectData.Level2;
+using Fuwafuwa.Core.Distributor.Implement;
+using Fuwafuwa.Core.Distributor.Interface;
 using Fuwafuwa.Core.Env;
 using Fuwafuwa.Core.ServiceCore.Level3;
+using Fuwafuwa.Core.ServiceRegister;
 using YourBot.Config.Implement;
 using YourBot.Config.Implement.Level1.Service;
 
@@ -23,9 +28,12 @@ public enum ServiceName {
     VersionProcessor,
     MemeProcessor,
     ServiceProcessor,
+    AntiFloodProcessor,
+    
     SendGroupMessageExecutor,
     LogToConsoleExecutor,
-    RevokeGroupMessageExecutor
+    RevokeGroupMessageExecutor,
+    MuteGroupMemberExecutor
 }
 
 public class ServiceManager {
@@ -62,22 +70,28 @@ public class ServiceManager {
         return inputHandler;
     }
 
-    public async Task SignProcessor<TProcessorCore, TServiceData, TSharedData, TInitData>(ServiceName serviceName,
+    public async Task SignPollingProcessor<TProcessorCore, TServiceData, TSharedData, TInitData>(ServiceName serviceName,
         TInitData initData)
         where TServiceData : IProcessorData
         where TProcessorCore : IProcessorCore<TServiceData, TSharedData, TInitData>, new()
         where TSharedData : ISharedDataWrapper {
-        Type serviceType;
+        await SignProcessor<TProcessorCore, TServiceData,
+            PollingDistributor<TServiceData, SubjectDataWithCommand, (SimpleSharedDataWrapper<Register>, TSharedData)>,
+            TSharedData, TInitData>(serviceName, initData);
+    }
+    
+    public async Task SignProcessor<TProcessorCore, TServiceData,TDistributor, TSharedData, TInitData>(ServiceName serviceName,
+        TInitData initData)
+        where TServiceData : IProcessorData
+        where TProcessorCore : IProcessorCore<TServiceData, TSharedData, TInitData>, new()
+        where TSharedData : ISharedDataWrapper
+        where TDistributor : IDistributor<TServiceData, SubjectDataWithCommand, (SimpleSharedDataWrapper<Register>, TSharedData)>, new() {
+        var serviceType =
+            Env.CreateRunProcessor<TProcessorCore, TServiceData,TDistributor, TSharedData, TInitData>(
+                initData);
         if (_serviceManagerConfig.ActiveServices.Contains(serviceName)) {
-            serviceType =
-                await Env.CreateRunRegisterPollingProcessor<TProcessorCore, TServiceData, TSharedData, TInitData>(
-                    initData);
-        } else {
-            serviceType =
-                Env.CreateRunPollingProcessor<TProcessorCore, TServiceData, TSharedData, TInitData>(
-                    initData);
+            await Env.Register(serviceType);
         }
-
         _name2Type[serviceName] = serviceType;
         _type2Name[serviceType] = serviceName;
     }
