@@ -11,11 +11,11 @@ using YourBot.Utils;
 
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group.Command;
 
-public class ServiceRunProcessor : IProcessorCore<CommandData,
+public class ServiceRunProcessor : IProcessorCore<GroupCommandData,
     AsyncSharedDataWrapper<(Func<List<(ServiceName, bool)>> getStatusFunc, Func<ServiceName, Task<bool>> registerFunc,
         Func<ServiceName, Task<bool>> unregisterFunc, ServiceRunConfig)>, (Func<List<(ServiceName, bool)>> getStatusFunc,
     Func<ServiceName, Task<bool>> registerFunc, Func<ServiceName, Task<bool>> unregisterFunc, ServiceRunConfig)> {
-    public static IServiceAttribute<CommandData> GetServiceAttribute() {
+    public static IServiceAttribute<GroupCommandData> GetServiceAttribute() {
         return ReadGroupCommandAttribute.GetInstance();
     }
 
@@ -32,7 +32,7 @@ public class ServiceRunProcessor : IProcessorCore<CommandData,
             registerFunc, Func<ServiceName, Task<bool>> unregisterFunc, ServiceRunConfig)> sharedData,
         Logger2Event? logger) { }
 
-    public async Task<List<Certificate>> ProcessData(CommandData data,
+    public async Task<List<Certificate>> ProcessData(GroupCommandData data,
         AsyncSharedDataWrapper<(Func<List<(ServiceName, bool)>> getStatusFunc, Func<ServiceName, Task<bool>>
             registerFunc, Func<ServiceName, Task<bool>> unregisterFunc, ServiceRunConfig)> sharedData,
         Logger2Event? logger) {

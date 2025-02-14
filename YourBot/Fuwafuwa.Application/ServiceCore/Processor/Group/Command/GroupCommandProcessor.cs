@@ -7,6 +7,7 @@ using Lagrange.Core.Message;
 using Lagrange.Core.Message.Entity;
 using YourBot.Fuwafuwa.Application.Attribute.Processor;
 using YourBot.Fuwafuwa.Application.Data.ProcessorData;
+using YourBot.Utils;
 
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group.Command;
 
@@ -32,7 +33,7 @@ public class GroupCommandProcessor : IProcessorCore<MessageData, NullSharedDataW
             return [];
         }
 
-        var commandMessageIndex = CheckCommand(messageChain);
+        var commandMessageIndex = YourBotUtil.CheckCommand(messageChain);
         if (commandMessageIndex == -1) {
             return [];
         }
@@ -42,14 +43,13 @@ public class GroupCommandProcessor : IProcessorCore<MessageData, NullSharedDataW
         var words = textEntity.Text[(index + 1)..].Split(' ');
 
         var command = words[0];
-        var commandData = new CommandData(command, messageChain, words[1..].ToList(), messageChain.GroupUin!.Value);
+        var commandData = new GroupCommandData(command, messageChain, words.Length > 1?words[1..].ToList() : [], messageChain.GroupUin!.Value);
 
         return [
             ReadGroupCommandAttribute.GetInstance().GetCertificate(commandData)
         ];
     }
-
-
+    
     private static bool CheckAt(MessageChain messageChain, string name, uint botUin) {
         foreach (var message in messageChain) {
             if (message is MentionEntity mentionEntity && mentionEntity.Uin == botUin) {
@@ -64,14 +64,5 @@ public class GroupCommandProcessor : IProcessorCore<MessageData, NullSharedDataW
         return false;
     }
 
-    private static int CheckCommand(MessageChain messageChain) {
-        for (var i = 0; i < messageChain.Count; ++i) {
-            var message = messageChain[i];
-            if (message is TextEntity textEntity && textEntity.Text.Contains('/')) {
-                return i;
-            }
-        }
 
-        return -1;
-    }
 }

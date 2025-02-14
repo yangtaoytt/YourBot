@@ -3,4 +3,4 @@ using YourBot.Fuwafuwa.Application.Data.ProcessorData;
 
 namespace YourBot.Fuwafuwa.Application.Attribute.Processor;
 
-public class ReadGroupCommandAttribute : IProcessorAttribute<ReadGroupCommandAttribute, CommandData>;
+public class ReadGroupCommandAttribute : IProcessorAttribute<ReadGroupCommandAttribute, GroupCommandData>;

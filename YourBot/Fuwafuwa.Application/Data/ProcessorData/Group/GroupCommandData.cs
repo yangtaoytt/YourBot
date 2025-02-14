@@ -3,8 +3,8 @@ using Lagrange.Core.Message;
 
 namespace YourBot.Fuwafuwa.Application.Data.ProcessorData;
 
-public class CommandData : IProcessorData {
-    public CommandData(string command, MessageChain messageChain, List<string> parameters, uint groupUin) {
+public class GroupCommandData : IProcessorData {
+    public GroupCommandData(string command, MessageChain messageChain, List<string> parameters, uint groupUin) {
         Command = command;
         MessageChain = messageChain;
         Parameters = parameters;

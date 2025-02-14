@@ -29,11 +29,15 @@ public enum ServiceName {
     MemeProcessor,
     ServiceProcessor,
     AntiFloodProcessor,
+    ActorProcessor,
+    FriendEventProcessor,
+    FriendCommandProcessor,
     
     SendGroupMessageExecutor,
     LogToConsoleExecutor,
     RevokeGroupMessageExecutor,
-    MuteGroupMemberExecutor
+    MuteGroupMemberExecutor,
+    SendMessage2FriendExecutor
 }
 
 public class ServiceManager {

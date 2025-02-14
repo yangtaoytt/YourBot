@@ -13,8 +13,8 @@ using YourBot.Fuwafuwa.Application.Data.ProcessorData;
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group.Command;
 
 public class
-    PingPongProcessor : IProcessorCore<CommandData, NullSharedDataWrapper<PingPongConfig>, PingPongConfig> {
-    public static IServiceAttribute<CommandData> GetServiceAttribute() {
+    PingPongProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrapper<PingPongConfig>, PingPongConfig> {
+    public static IServiceAttribute<GroupCommandData> GetServiceAttribute() {
         return ReadGroupCommandAttribute.GetInstance();
     }
 
@@ -24,7 +24,7 @@ public class
 
     public static void Final(NullSharedDataWrapper<PingPongConfig> sharedData, Logger2Event? logger) { }
 
-    public async Task<List<Certificate>> ProcessData(CommandData data,
+    public async Task<List<Certificate>> ProcessData(GroupCommandData data,
         NullSharedDataWrapper<PingPongConfig> sharedData, Logger2Event? logger) {
         await Task.CompletedTask;
 

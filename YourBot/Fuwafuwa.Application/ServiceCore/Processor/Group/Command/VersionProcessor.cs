@@ -15,8 +15,8 @@ using YourBot.Utils;
 
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group.Command;
 
-public class VersionProcessor : IProcessorCore<CommandData, NullSharedDataWrapper<(VersionConfig versionConfig, DatabaseConfig databaseConfig)>, (VersionConfig versionConfig, DatabaseConfig databaseConfig)> {
-    public static IServiceAttribute<CommandData> GetServiceAttribute() {
+public class VersionProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrapper<(VersionConfig versionConfig, DatabaseConfig databaseConfig)>, (VersionConfig versionConfig, DatabaseConfig databaseConfig)> {
+    public static IServiceAttribute<GroupCommandData> GetServiceAttribute() {
         return ReadGroupCommandAttribute.GetInstance();
     }
 
@@ -26,7 +26,7 @@ public class VersionProcessor : IProcessorCore<CommandData, NullSharedDataWrappe
 
     public static void Final(NullSharedDataWrapper<(VersionConfig versionConfig, DatabaseConfig databaseConfig)> sharedData, Logger2Event? logger) { }
 
-    public async Task<List<Certificate>> ProcessData(CommandData data,
+    public async Task<List<Certificate>> ProcessData(GroupCommandData data,
         NullSharedDataWrapper<(VersionConfig versionConfig, DatabaseConfig databaseConfig)> sharedData, Logger2Event? logger) {
         await Task.CompletedTask;
 

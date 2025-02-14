@@ -15,4 +15,8 @@ public static partial class YourBotUtil {
         var isWhiteList = value.IsWhiteList;
         return isWhiteList ? value.MemberList.Contains(memberUin) : !value.MemberList.Contains(memberUin);
     }
+    
+    public static bool CheckFriendPermission<TConfig>(TConfig config, uint friendUin) where TConfig : AFriendPermissionConfig<TConfig>, IConfig {
+        return config.FriendPermission.Contains(friendUin);
+    }
 }

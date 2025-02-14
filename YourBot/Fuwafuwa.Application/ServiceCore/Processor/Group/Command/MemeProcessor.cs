@@ -18,11 +18,11 @@ using YourBot.Utils;
 
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group.Command;
 
-public class MemeProcessor : IProcessorCore<CommandData,
+public class MemeProcessor : IProcessorCore<GroupCommandData,
     AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
         configs)>, (BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
     configs)> {
-    public static IServiceAttribute<CommandData> GetServiceAttribute() {
+    public static IServiceAttribute<GroupCommandData> GetServiceAttribute() {
         return ReadGroupCommandAttribute.GetInstance();
     }
 
@@ -33,7 +33,7 @@ public class MemeProcessor : IProcessorCore<CommandData,
     }
 
     public static void Final(AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs)> sharedData, Logger2Event? logger) { }
-    public async Task<List<Certificate>> ProcessData(CommandData data, AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs)> sharedData, Logger2Event? logger) {
+    public async Task<List<Certificate>> ProcessData(GroupCommandData data, AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs)> sharedData, Logger2Event? logger) {
         var groupUin = data.GroupUin;
         
         var configs = await sharedData.ExecuteAsync(reference => Task.FromResult(reference.Value.configs));
@@ -74,7 +74,7 @@ public class MemeProcessor : IProcessorCore<CommandData,
         ];
     }
     
-    private static async Task<List<Certificate>> SaveMeme(CommandData data,
+    private static async Task<List<Certificate>> SaveMeme(GroupCommandData data,
         AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
             configs)> sharedData, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs) {
         var messageChain = data.MessageChain;
@@ -116,7 +116,7 @@ public class MemeProcessor : IProcessorCore<CommandData,
 
     }
     
-    private static async Task<List<Certificate>> GetMeme(CommandData data, 
+    private static async Task<List<Certificate>> GetMeme(GroupCommandData data, 
         AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
             configs)> sharedData, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs) {
         try {

@@ -11,7 +11,7 @@ namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group;
 public class GroupEventProcessor : IProcessorCore<GroupEventData, SimpleSharedDataWrapper<GlobalGroupActiveConfig>,
     GlobalGroupActiveConfig> {
     public static IServiceAttribute<GroupEventData> GetServiceAttribute() {
-        return ReadGroupQEventAttribute.GetInstance();
+        return ReadGroupEventAttribute.GetInstance();
     }
 
     public static SimpleSharedDataWrapper<GlobalGroupActiveConfig> Init(GlobalGroupActiveConfig initData) {
