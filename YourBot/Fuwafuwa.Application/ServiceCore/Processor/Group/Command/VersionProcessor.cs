@@ -33,7 +33,7 @@ public class VersionProcessor : IProcessorCore<CommandData, NullSharedDataWrappe
         var configs = sharedData.Execute(initData => initData.Value);
 
         var groupUin = data.GroupUin;
-        if (!Util.CheckSimpleGroupPermission(configs.versionConfig, groupUin)) {
+        if (!YourBotUtil.CheckSimpleGroupPermission(configs.versionConfig, groupUin)) {
             return [];
         }
 

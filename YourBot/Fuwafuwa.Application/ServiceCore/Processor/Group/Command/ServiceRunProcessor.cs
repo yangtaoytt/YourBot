@@ -40,7 +40,7 @@ public class ServiceRunProcessor : IProcessorCore<CommandData,
 
         var groupUin = data.GroupUin;
         var memberUin = data.MessageChain.FriendUin;
-        if (!Utils.Util.CheckGroupMemberPermission(config, groupUin, memberUin)) {
+        if (!Utils.YourBotUtil.CheckGroupMemberPermission(config, groupUin, memberUin)) {
             return [];
         }
 
@@ -53,13 +53,13 @@ public class ServiceRunProcessor : IProcessorCore<CommandData,
         if (parameters.Count == 0) {
             return [
                 CanSendGroupMessageAttribute.GetInstance()
-                    .GetCertificate(Util.BuildSendToGroupMessageData(
+                    .GetCertificate(YourBotUtil.BuildSendToGroupMessageData(
                         data.GroupUin, config.Priority, "wrong parameters"))
             ];
         }
 
         if (parameters.Count < 2) {
-            return [Util.SendToGroupMessage(data.GroupUin, config.Priority, "wrong parameters")];
+            return [YourBotUtil.SendToGroupMessage(data.GroupUin, config.Priority, "wrong parameters")];
         }
 
         var commandType = parameters[0];
@@ -72,7 +72,7 @@ public class ServiceRunProcessor : IProcessorCore<CommandData,
                 .Select(s => $"{s.Item1} : {s.Item2}")
                 .Aggregate((s1, s2) => $"{s1}\n{s2}");
             return [
-                Util.SendToGroupMessage(data.GroupUin, config.Priority, message)
+                YourBotUtil.SendToGroupMessage(data.GroupUin, config.Priority, message)
             ];
         }
 
@@ -81,7 +81,7 @@ public class ServiceRunProcessor : IProcessorCore<CommandData,
             var registerResult =
                 await sharedData.ExecuteAsync(async reference => await reference.Value.registerFunc(service));
             return [
-                Util.SendToGroupMessage(data.GroupUin, config.Priority, registerResult ? "add success" : "add failed")
+                YourBotUtil.SendToGroupMessage(data.GroupUin, config.Priority, registerResult ? "add success" : "add failed")
             ];
         }
 
@@ -89,11 +89,11 @@ public class ServiceRunProcessor : IProcessorCore<CommandData,
             var unregisterResult =
                 await sharedData.ExecuteAsync(async reference => await reference.Value.unregisterFunc(service));
             return [
-                Util.SendToGroupMessage(data.GroupUin, config.Priority,
+                YourBotUtil.SendToGroupMessage(data.GroupUin, config.Priority,
                     unregisterResult ? "remove success" : "remove failed")
             ];
         }
 
-        return [Util.SendToGroupMessage(data.GroupUin, config.Priority, "wrong command")];
+        return [YourBotUtil.SendToGroupMessage(data.GroupUin, config.Priority, "wrong command")];
     }
 }

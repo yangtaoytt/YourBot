@@ -89,7 +89,7 @@ public class CloseAI : IAI {
         IMessageEntity messageEntity) {
         Debug.Assert(messageEntity is not MultiMsgEntity or FileEntity or VideoEntity);
         if (messageEntity is ImageEntity imageEntity) {
-            var imageStream = await Util.SaveImageAndConvertToJpegStream(imageEntity.ImageUrl);
+            var imageStream = await YourBotUtil.SaveImageAndConvertToJpegStream(imageEntity.ImageUrl);
             var imageBytes = await BinaryData.FromStreamAsync(imageStream);
             return ChatMessageContentPart.CreateImagePart(imageBytes, "image/jpeg");
         }

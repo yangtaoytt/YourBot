@@ -3,7 +3,7 @@ using YourBot.Config.Interface;
 
 namespace YourBot.Utils;
 
-public static partial class Util {
+public static partial class YourBotUtil {
     public static bool CheckSimpleGroupPermission<TConfig>(TConfig config, uint groupUin) where TConfig : ASimpleGroupPermissionConfig<TConfig>, IConfig {
         return config.GroupPermission.Contains(groupUin);
     }

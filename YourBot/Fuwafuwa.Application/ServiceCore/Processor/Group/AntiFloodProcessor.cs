@@ -28,7 +28,7 @@ public class AntiFloodProcessor : IProcessorCore<MessageData, NullSharedDataWrap
         var messages = data.MessageChain;
         var groupUin = messages.GroupUin!.Value;
         var memberUin = messages.FriendUin;
-        if (!Utils.Util.CheckGroupMemberPermission(config, groupUin, memberUin)) {
+        if (!Utils.YourBotUtil.CheckGroupMemberPermission(config, groupUin, memberUin)) {
             return [];
         }
         
@@ -48,11 +48,11 @@ public class AntiFloodProcessor : IProcessorCore<MessageData, NullSharedDataWrap
             return [];
         }
         if (_groupMemberMessageCount[groupUin][memberUin].Item1 <= config.FloodLimit) {
-            return [Utils.Util.SendToGroupMessage(groupUin, config.Priority, "请注意发送消息过快可能影响群友阅读")];
+            return [Utils.YourBotUtil.SendToGroupMessage(groupUin, config.Priority, "请注意发送消息过快可能影响群友阅读")];
         }
 
         return [
-            Utils.Util.SendToGroupMessage(groupUin, config.Priority, "请勿刷屏"),
+            Utils.YourBotUtil.SendToGroupMessage(groupUin, config.Priority, "请勿刷屏"),
             CanMuteGroupMemberAttribute.GetInstance().GetCertificate(
                 new MuteGroupMemberData(new Priority(config.Priority, PriorityStrategy.Share), groupUin, memberUin, config.MuteTime))
         ];

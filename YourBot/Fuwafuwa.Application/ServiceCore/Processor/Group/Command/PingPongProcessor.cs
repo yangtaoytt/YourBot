@@ -32,7 +32,7 @@ public class
 
         var groupUin = data.GroupUin;
         var memberUin = data.MessageChain.FriendUin;
-        if (!Utils.Util.CheckGroupMemberPermission(config, groupUin, memberUin)) {
+        if (!Utils.YourBotUtil.CheckGroupMemberPermission(config, groupUin, memberUin)) {
             return [];
         }
 

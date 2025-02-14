@@ -53,7 +53,7 @@ public class GroupMessageLogProcessor : IProcessorCore<MessageData,
         var groupUin = messageChain.GroupUin!.Value;
         
         var config = await sharedData.ExecuteAsync(reference => Task.FromResult(reference.Value.logInitData));
-        if (!Utils.Util.CheckSimpleGroupPermission(config, groupUin)) {
+        if (!Utils.YourBotUtil.CheckSimpleGroupPermission(config, groupUin)) {
             return [];
         }
 
@@ -71,7 +71,7 @@ public class GroupMessageLogProcessor : IProcessorCore<MessageData,
         });
 
         var messageSource = $"Group: {group.GroupName}, User: {member.MemberName}, Content: ";
-        var messages = Util.GetSummaryStringInLine(messageChain);
+        var messages = YourBotUtil.GetSummaryStringInLine(messageChain);
 
         var logToConsoleData = new LogToConsoleData(new Priority(100, PriorityStrategy.Share),
             messageSource + messages, "GroupMessageLogProcessor", LogLevel.Information);

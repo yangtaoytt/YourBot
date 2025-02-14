@@ -34,7 +34,7 @@ public class
         var groupUin = data.MessageChain.GroupUin!.Value;
 
         var config = sharedData.Execute(initData => initData.Value);
-        if (!Utils.Util.CheckSimpleGroupPermission(config, groupUin)) {
+        if (!Utils.YourBotUtil.CheckSimpleGroupPermission(config, groupUin)) {
             return [];
         }
 

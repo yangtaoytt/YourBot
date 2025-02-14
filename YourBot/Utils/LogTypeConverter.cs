@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 
 namespace YourBot.Utils;
 
-public static partial class Util {
+public static partial class YourBotUtil {
     public static LogLevel LogLevelConvert(Lagrange.Core.Event.EventArg.LogLevel logLevel) {
         return logLevel switch {
             Lagrange.Core.Event.EventArg.LogLevel.Debug => LogLevel.Debug,

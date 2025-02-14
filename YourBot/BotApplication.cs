@@ -121,7 +121,7 @@ public class BotApplication : IDisposable {
         Console.InputEncoding = Encoding.UTF8;
 
         _botContext.Invoker.OnBotLogEvent += (sender, e) => {
-            _appLogger.FromModule(LogSource.Lagrange).Log(Util.LogLevelConvert(e.Level), e.EventMessage);
+            _appLogger.FromModule(LogSource.Lagrange).Log(YourBotUtil.LogLevelConvert(e.Level), e.EventMessage);
         };
 
         if (!await _loginStrategy.Login(_deviceInfo, _keystore, _botContext, _appLogger)) {

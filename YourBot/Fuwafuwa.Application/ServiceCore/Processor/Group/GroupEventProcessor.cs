@@ -27,7 +27,7 @@ public class GroupEventProcessor : IProcessorCore<GroupEventData, SimpleSharedDa
         var messageChain = data.GroupMessageEvent.Chain;
         var groupUin = messageChain.GroupUin!.Value;
         var config = sharedData.Execute(reference => reference.Value);
-        if (!Utils.Util.CheckSimpleGroupPermission(config, groupUin)) {
+        if (!Utils.YourBotUtil.CheckSimpleGroupPermission(config, groupUin)) {
             return [];
         }
 

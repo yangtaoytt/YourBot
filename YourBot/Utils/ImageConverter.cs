@@ -3,7 +3,7 @@ using SixLabors.ImageSharp.Formats.Jpeg;
 
 namespace YourBot.Utils;
 
-public static partial class Util {
+public static partial class YourBotUtil {
     // 静态 HttpClient 实例，避免每次创建
     private static readonly HttpClient client = new();
 

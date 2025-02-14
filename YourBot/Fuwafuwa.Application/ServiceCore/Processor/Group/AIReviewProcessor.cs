@@ -39,7 +39,7 @@ public class AIReviewProcessor : IProcessorCore<MessageData, AsyncSharedDataWrap
         var memberUin = messages.FriendUin;
 
         var config = await sharedData.ExecuteAsync(reference => Task.FromResult(reference.Value.Item2));
-        if (!Utils.Util.CheckGroupMemberPermission(config, groupUin, memberUin)) {
+        if (!Utils.YourBotUtil.CheckGroupMemberPermission(config, groupUin, memberUin)) {
             return [];
         }
 

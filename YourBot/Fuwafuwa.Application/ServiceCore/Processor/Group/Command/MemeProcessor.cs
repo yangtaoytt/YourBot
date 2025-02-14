@@ -26,212 +26,6 @@ public class MemeProcessor : IProcessorCore<CommandData,
         return ReadGroupCommandAttribute.GetInstance();
     }
 
-    private static async Task<List<Certificate>> GetMeme(CommandData data,
-        AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
-            configs)> sharedData, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs) {
-        try {
-            await using var conn = new MySqlConnection(configs.databaseConfig.ConnectionString);
-            await conn.OpenAsync();
-
-            // Get random meme
-            int memeId;
-            await using (var cmd = new MySqlCommand("SELECT id FROM meme ORDER BY RAND() LIMIT 1", conn)) {
-                var result = await cmd.ExecuteScalarAsync();
-                if (result == null) {
-                    return [
-                        CanSendGroupMessageAttribute.GetInstance()
-                            .GetCertificate(
-                                Util.BuildSendToGroupMessageData(data.GroupUin, configs.memeConfig.Priority, "No memes found"))
-                    ];
-                }
-
-                memeId = Convert.ToInt32(result);
-            }
-
-            // Get message components
-            var messageBuilder = MessageBuilder.Group(data.GroupUin);
-            var entities = new List<(int, object)>();
-
-            // Process faces
-            await using (var cmd = new MySqlCommand(
-                             "SELECT face_id, is_large,sequence FROM meme_face_message WHERE meme_id = @id ORDER BY sequence",
-                             conn)) {
-                cmd.Parameters.AddWithValue("@id", memeId);
-                using var reader = await cmd.ExecuteReaderAsync();
-                while (await reader.ReadAsync()) {
-                    entities.Add((reader.GetInt32(reader.GetOrdinal("sequence")), new FaceEntity(
-                        (ushort)reader.GetInt32(reader.GetOrdinal("face_id")),
-                        reader.GetBoolean(reader.GetOrdinal("is_large"))
-                    )));
-                }
-            }
-
-            // Process images
-            await using (var cmd = new MySqlCommand(
-                             "SELECT path, sequence FROM meme_image_message WHERE meme_id = @id ORDER BY sequence",
-                             conn)) {
-                cmd.Parameters.AddWithValue("@id", memeId);
-                using var reader = await cmd.ExecuteReaderAsync();
-                while (await reader.ReadAsync()) {
-                    var path = reader.GetString(reader.GetOrdinal("path"));
-                    var imageBytes = await File.ReadAllBytesAsync(path);
-                    entities.Add((reader.GetInt32(reader.GetOrdinal("sequence")), imageBytes));
-                }
-            }
-
-            // Process texts
-            await using (var cmd = new MySqlCommand(
-                             "SELECT content, sequence FROM meme_text_message WHERE meme_id = @id ORDER BY sequence",
-                             conn)) {
-                cmd.Parameters.AddWithValue("@id", memeId);
-                using var reader = await cmd.ExecuteReaderAsync();
-                while (await reader.ReadAsync()) {
-                    entities.Add((reader.GetInt32(reader.GetOrdinal("sequence")),
-                        new TextEntity(reader.GetString(reader.GetOrdinal("content")))));
-                }
-            }
-
-            // Build message chain
-            entities.Sort((a, b) => a.Item1.CompareTo(b.Item1));
-            foreach (var (_, entity) in entities) {
-                if (entity is FaceEntity faceEntity) {
-                    messageBuilder.Face(faceEntity.FaceId, faceEntity.IsLargeFace);
-                } else if (entity is byte[] imageBytes) {
-                    messageBuilder.Image(imageBytes);
-                } else if (entity is TextEntity textEntity) {
-                    messageBuilder.Text(textEntity.Text);
-                }
-            }
-
-            return [
-                CanSendGroupMessageAttribute.GetInstance()
-                    .GetCertificate(
-                        new SendToGroupMessageData(
-                            new Priority(configs.memeConfig.Priority, PriorityStrategy.Share),
-                            messageBuilder.Build()
-                        )
-                    )
-            ];
-        } catch (Exception ex) {
-            return [
-                CanSendGroupMessageAttribute.GetInstance()
-                    .GetCertificate(
-                        Util.BuildSendToGroupMessageData(data.GroupUin, configs.memeConfig.Priority, $"Error: {ex.Message}")
-                    )
-            ];
-        }
-    }
-
-    private static async Task<List<Certificate>> SaveMeme(CommandData data,
-        AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
-            configs)> sharedData, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs) {
-        var messageChain = data.MessageChain;
-
-        if (messageChain[0] is not ForwardEntity forwardEntity) {
-            return [
-                CanSendGroupMessageAttribute.GetInstance()
-                    .GetCertificate(Util.BuildSendToGroupMessageData(
-                        data.GroupUin, configs.memeConfig.Priority, "wrong parameters type"))
-            ];
-        }
-
-        var targetMessageChain = (await sharedData.ExecuteAsync(reference => reference.Value.botContext.GetGroupMessage(
-            data.GroupUin,
-            forwardEntity.Sequence, forwardEntity.Sequence)))![0];
-
-        await SaveMeme(targetMessageChain, configs.databaseConfig.ConnectionString, configs.memeConfig.ImageDir);
-
-        return [
-            CanSendGroupMessageAttribute.GetInstance()
-                .GetCertificate(Util.BuildSendToGroupMessageData(
-                    data.GroupUin, configs.memeConfig.Priority, "save successfully"))
-        ];
-    }
-
-
-    private static async Task SaveMeme(MessageChain messageChain, string connectionString, string imageDir) {
-        // Save meme to database
-        await using var conn = new MySqlConnection(connectionString);
-        conn.Open();
-        const string queryMemeHash = "SELECT COUNT(*) FROM meme WHERE hash_code = @hash_code";
-        const string insertMeme = "INSERT INTO meme (sender_uin, hash_code) VALUES (@sender_uin, @hash_code)";
-        const string queryMemeId = "SELECT id FROM meme WHERE hash_code = @hash_code";
-
-        const string queryImageName = "SELECT COUNT(path) FROM meme_image_message";
-        const string insertFace =
-            "INSERT INTO meme_face_message (face_id, is_large, meme_id, sequence) VALUES (@face_id, @is_large, @meme_id, @sequence)";
-        const string insertImage =
-            "INSERT INTO meme_image_message (size, path, meme_id, sequence) VALUES (@size, @path, @meme_id, @sequence)";
-        const string insertText =
-            "INSERT INTO meme_text_message (content, meme_id, sequence) VALUES (@content, @meme_id, @sequence)";
-
-        var transaction = await conn.BeginTransactionAsync();
-
-        try {
-            var hash = messageChain.GetHashCode();
-            await using (var cmd = new MySqlCommand(queryMemeHash, conn, transaction)) {
-                cmd.Parameters.AddWithValue("@hash_code", hash);
-                var count = Convert.ToInt32(cmd.ExecuteScalar());
-                if (count > 0) {
-                    throw new Exception("Meme already exists");
-                }
-            }
-
-            await using (var cmd = new MySqlCommand(insertMeme, conn, transaction)) {
-                cmd.Parameters.AddWithValue("@sender_uin", messageChain.FriendUin);
-                cmd.Parameters.AddWithValue("@hash_code", hash);
-                cmd.ExecuteNonQuery();
-            }
-
-            int memeId;
-            await using (var cmd = new MySqlCommand(queryMemeId, conn, transaction)) {
-                cmd.Parameters.AddWithValue("@hash_code", hash);
-                memeId = Convert.ToInt32(cmd.ExecuteScalar());
-            }
-
-            for (var i = 0; i < messageChain.Count; i++) {
-                var message = messageChain[i];
-                if (message is FaceEntity faceEntity) {
-                    await using var cmd = new MySqlCommand(insertFace, conn, transaction);
-                    cmd.Parameters.AddWithValue("@face_id", faceEntity.FaceId);
-                    cmd.Parameters.AddWithValue("@is_large", faceEntity.IsLargeFace ? 1 : 0);
-                    cmd.Parameters.AddWithValue("@meme_id", memeId);
-                    cmd.Parameters.AddWithValue("@sequence", i);
-                } else if (message is ImageEntity imageEntity) {
-                    string name;
-                    await using (var cmd = new MySqlCommand(queryImageName, conn, transaction)) {
-                        var id = Convert.ToInt32(cmd.ExecuteScalar());
-                        name = id + ".jpg";
-                    }
-
-                    var imagePath = Path.Combine(imageDir, name);
-                    await Util.SaveImage(imageEntity.ImageUrl, imagePath);
-
-                    await using (var cmd = new MySqlCommand(insertImage, conn, transaction)) {
-                        cmd.Parameters.AddWithValue("@size", imageEntity.ImageSize);
-                        cmd.Parameters.AddWithValue("@path", imagePath);
-                        cmd.Parameters.AddWithValue("@meme_id", memeId);
-                        cmd.Parameters.AddWithValue("@sequence", i);
-                        cmd.ExecuteNonQuery();
-                    }
-                } else if (message is TextEntity textEntity) {
-                    await using var cmd = new MySqlCommand(insertText, conn, transaction);
-
-                    cmd.Parameters.AddWithValue("@content",
-                        textEntity.Text.Length > 800 ? textEntity.Text.Substring(0, 800) : textEntity.Text);
-                    cmd.Parameters.AddWithValue("@meme_id", memeId);
-                    cmd.Parameters.AddWithValue("@sequence", i);
-                    cmd.ExecuteNonQuery();
-                }
-            }
-
-            await transaction.CommitAsync();
-        } catch (Exception) {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
-
     public static AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs)> Init(
         (BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs) initData) {
         return new AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig
@@ -244,7 +38,7 @@ public class MemeProcessor : IProcessorCore<CommandData,
         
         var configs = await sharedData.ExecuteAsync(reference => Task.FromResult(reference.Value.configs));
 
-        var hasPermission = Utils.Util.CheckSimpleGroupPermission(configs.memeConfig, groupUin);
+        var hasPermission = Utils.YourBotUtil.CheckSimpleGroupPermission(configs.memeConfig, groupUin);
         if (!hasPermission) {
             return [];
         }
@@ -259,24 +53,108 @@ public class MemeProcessor : IProcessorCore<CommandData,
         if (parameters.Count == 0) {
             return [
                 CanSendGroupMessageAttribute.GetInstance()
-                    .GetCertificate(Util.BuildSendToGroupMessageData(
+                    .GetCertificate(YourBotUtil.BuildSendToGroupMessageData(
                         data.GroupUin, configs.memeConfig.Priority, "wrong parameters"))
             ];
         }
 
         var parameter = parameters[0];
-        if (parameters[0] == "save") {
+        if (parameter == "save") {
             return await SaveMeme(data, sharedData, configs);
         }
 
-        if (parameters[0] == "get") {
+        if (parameter == "get") {
             return await GetMeme(data, sharedData, configs);
         }
 
         return [
             CanSendGroupMessageAttribute.GetInstance()
-                .GetCertificate(Util.BuildSendToGroupMessageData(
+                .GetCertificate(YourBotUtil.BuildSendToGroupMessageData(
                     data.GroupUin, configs.memeConfig.Priority, "wrong parameters"))
         ];
+    }
+    
+    private static async Task<List<Certificate>> SaveMeme(CommandData data,
+        AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
+            configs)> sharedData, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs) {
+        var messageChain = data.MessageChain;
+
+        if (messageChain[0] is not ForwardEntity forwardEntity) {
+            return [
+                CanSendGroupMessageAttribute.GetInstance()
+                    .GetCertificate(YourBotUtil.BuildSendToGroupMessageData(
+                        data.GroupUin, configs.memeConfig.Priority, "wrong parameters type"))
+            ];
+        }
+
+        var targetMessageChain = (await sharedData.ExecuteAsync(reference => reference.Value.botContext.GetGroupMessage(
+            data.GroupUin,
+            forwardEntity.Sequence, forwardEntity.Sequence)))![0];
+
+        try {
+            var savedMessageChainId = await Utils.YourBotUtil.SaveMessageChain(targetMessageChain,
+                configs.databaseConfig.ConnectionString, configs.memeConfig.ImageDir);
+            
+            await using var connection = new MySqlConnection( configs.databaseConfig.ConnectionString);
+            connection.Open();
+            await using var cmd = new MySqlCommand("INSERT INTO meme (message_chain_id) VALUES (@messageChainId)", connection);
+            cmd.Parameters.AddWithValue("@messageChainId", savedMessageChainId);
+            await cmd.ExecuteNonQueryAsync();
+
+            return [
+                CanSendGroupMessageAttribute.GetInstance()
+                    .GetCertificate(YourBotUtil.BuildSendToGroupMessageData(
+                        data.GroupUin, configs.memeConfig.Priority, "save successfully"))
+            ];
+        } catch (Exception e) {
+            return [
+                CanSendGroupMessageAttribute.GetInstance()
+                    .GetCertificate(YourBotUtil.BuildSendToGroupMessageData(
+                        data.GroupUin, configs.memeConfig.Priority, $"Error: {e.Message}"))
+            ];
+        }
+
+    }
+    
+    private static async Task<List<Certificate>> GetMeme(CommandData data, 
+        AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
+            configs)> sharedData, (MemeConfig memeConfig, DatabaseConfig databaseConfig) configs) {
+        try {
+            await using var conn = new MySqlConnection(configs.databaseConfig.ConnectionString);
+            await conn.OpenAsync();
+
+            // Get random meme
+            uint messageChainId;
+            await using (var cmd = new MySqlCommand("SELECT message_chain_id FROM meme ORDER BY RAND() LIMIT 1", conn)) {
+                var result = await cmd.ExecuteScalarAsync();
+                if (result == null) {
+                    return [
+                        CanSendGroupMessageAttribute.GetInstance()
+                            .GetCertificate(
+                                YourBotUtil.BuildSendToGroupMessageData(data.GroupUin, configs.memeConfig.Priority, "No memes found"))
+                    ];
+                }
+
+                messageChainId = Convert.ToUInt32(result);
+            }
+            var resultMessageChain = await Utils.YourBotUtil.GetMessageChain(messageChainId, configs.databaseConfig.ConnectionString);
+
+            return [
+                CanSendGroupMessageAttribute.GetInstance()
+                    .GetCertificate(
+                        new SendToGroupMessageData(
+                            new Priority(configs.memeConfig.Priority, PriorityStrategy.Share),
+                            resultMessageChain
+                        )
+                    )
+            ];
+        } catch (Exception ex) {
+            return [
+                CanSendGroupMessageAttribute.GetInstance()
+                    .GetCertificate(
+                        YourBotUtil.BuildSendToGroupMessageData(data.GroupUin, configs.memeConfig.Priority, $"Error: {ex.Message}")
+                    )
+            ];
+        }
     }
 }
