@@ -53,13 +53,17 @@ public class GroupMessageLogProcessor : IProcessorCore<MessageData,
         var groupUin = messageChain.GroupUin!.Value;
         
         var config = await sharedData.ExecuteAsync(reference => Task.FromResult(reference.Value.logInitData));
-        if (!Utils.YourBotUtil.CheckSimpleGroupPermission(config, groupUin)) {
+        if (!YourBotUtil.CheckSimpleGroupPermission(config, groupUin)) {
             return [];
         }
 
 
         var (group, member) = await sharedData.ExecuteAsync(async reference => {
             var value = reference.Value;
+            if (!value.groupDic.ContainsKey(groupUin)) {
+                value.groupDic[groupUin] = (
+                    (await value.botContext.FetchGroups()).First(group => group.GroupUin == groupUin), null);
+            }
             if (value.groupDic[groupUin].groupMembers == null) {
                 var botGroup = value.groupDic[groupUin].botGroup;
                 value.groupDic[groupUin] = (botGroup, await value.botContext.FetchMembers(groupUin));

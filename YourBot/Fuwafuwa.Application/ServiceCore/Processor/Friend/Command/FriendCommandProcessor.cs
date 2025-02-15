@@ -7,6 +7,7 @@ using YourBot.Fuwafuwa.Application.Attribute.Processor.Friend;
 using YourBot.Fuwafuwa.Application.Data.ProcessorData;
 using YourBot.Fuwafuwa.Application.Data.ProcessorData.Friend;
 using YourBot.Utils;
+using YourBot.Utils.Command;
 
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Friend.Command;
 
@@ -30,9 +31,12 @@ public class FriendCommandProcessor : IProcessorCore<MessageData,NullSharedDataW
         }
         var textEntity = (messageChain[commandMessageIndex] as TextEntity)!;
         var index = textEntity.Text.IndexOf('/');
-        var words = textEntity.Text[(index + 1)..].Split(' ');
-        var command = words[0];
-        var commandData = new FriendCommandData(command, words.Length > 1?words[1..].ToList():[],messageChain, messageChain.FriendUin);
+        var words = textEntity.Text[(index + 1)..].Split(' ').Select(item => item.Trim()).ToList();
+        if (words.Count == 0) {
+            return [];
+        }
+        var commandHandler = new CommandHandler(words);
+        var commandData = new FriendCommandData(commandHandler, messageChain, messageChain.FriendUin);
         return [ReadFriendCommandAttribute.GetInstance().GetCertificate(commandData)];
     }
 }

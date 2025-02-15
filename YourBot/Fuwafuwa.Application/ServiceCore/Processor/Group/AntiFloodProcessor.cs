@@ -13,7 +13,7 @@ using YourBot.Fuwafuwa.Application.Data.ProcessorData;
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group;
 
 public class AntiFloodProcessor : IProcessorCore<MessageData, NullSharedDataWrapper<AntiFloodConfig>, AntiFloodConfig> {
-    private Dictionary<uint, Dictionary<uint, (double, DateTime)>> _groupMemberMessageCount = new();
+    private readonly Dictionary<uint, Dictionary<uint, (double, DateTime)>> _groupMemberMessageCount = new();
     
     public static IServiceAttribute<MessageData> GetServiceAttribute() {
         return ReadGroupMessageAttribute.GetInstance();

@@ -226,9 +226,9 @@ public class BotApplication : IDisposable {
                 NullSharedDataWrapper<AntiFloodConfig>, AntiFloodConfig>(ServiceName.AntiFloodProcessor,_configManager.ReadConfig<AntiFloodConfig>());
         await _serviceManager
             .SignPollingProcessor<ActorProcessor, FriendCommandData,
-                NullSharedDataWrapper<(ActorConfig actorConfig, DatabaseConfig databaseConfig)>, (ActorConfig
-                actorConfig, DatabaseConfig databaseConfig)>(ServiceName.ActorProcessor,(_configManager.ReadConfig<ActorConfig>(),
-                _configManager.ReadConfig<DatabaseConfig>()));
+                AsyncSharedDataWrapper<(ActorConfig actorConfig, DatabaseConfig databaseConfig, BotContext botContext, Dictionary<uint, string> userUinToName)>, (ActorConfig
+                actorConfig, DatabaseConfig databaseConfig, BotContext botContext)>(ServiceName.ActorProcessor,(_configManager.ReadConfig<ActorConfig>(),
+                _configManager.ReadConfig<DatabaseConfig>(),_botContext));
 
         await _serviceManager.SignExecutor<SendGroupMessageExecutor, SendToGroupMessageData,
             AsyncSharedDataWrapper<BotContext>, BotContext>(ServiceName.SendGroupMessageExecutor, _botContext);
