@@ -47,6 +47,8 @@ public class ActorProcessor : IProcessorCore<FriendCommandData,
                     return await RmActor(commandHandler, friendUin, configs);
                 case "ls":
                     return await LsActor(friendUin, configs);
+                case "ls-mine":
+                    return await LsMineActor(friendUin, configs);
                 case "ls-member":
                     return await LsMember(commandHandler, friendUin, configs, sharedData);
                 case "rm-member":
@@ -454,4 +456,36 @@ public class ActorProcessor : IProcessorCore<FriendCommandData,
         }
         return await sharedData.ExecuteAsync(reference => Task.FromResult(reference.Value.userUinToName[userUin]));
     }
+    
+    private const string SqlLsMineActor =
+        "SELECT a.name  FROM actor a  JOIN actor_member am ON a.id = am.actor_id  WHERE am.user_uin = @userUin;";
+
+    private static async Task<List<Certificate>> LsMineActor(uint friendUin,
+        (ActorConfig actorConfig, DatabaseConfig databaseConfig) configs) {
+        var connectionStr = configs.databaseConfig.ConnectionString;
+        await using var connection = new MySqlConnection(connectionStr);
+        connection.Open();
+        await using var transaction = await connection.BeginTransactionAsync();
+        List<string> actorList;
+        try {
+            await using (var cmd = new MySqlCommand(SqlLsMineActor, connection, transaction)) {
+                cmd.Parameters.AddWithValue("@userUin", friendUin);
+                actorList = new List<string>();
+                await using var reader = cmd.ExecuteReader();
+
+                while (await reader.ReadAsync()) {
+                    actorList.Add(reader.GetString("name"));
+                }
+            }
+        } catch (Exception e) {
+            return [YourBotUtil.SendToFriendMessage(friendUin, configs.actorConfig.Priority,
+                $"lsMine failed.({e.Message})")];
+        }
+        
+        await transaction.CommitAsync();
+        
+        return [YourBotUtil.SendToFriendMessage(friendUin, configs.actorConfig.Priority,
+            "Your Actors: \n" + string.Join("\n ", actorList.Select((actor, index) => $"{index + 1}. {actor}")))];
+    }
+    
 }
