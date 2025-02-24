@@ -663,7 +663,10 @@ public class HomeworkProcessor : IProcessorCore<FriendCommandData,AsyncSharedDat
     private static async Task<List<Certificate>> LsMineHomework(CommandHandler commandHandler, uint friendUin,
         (HomeworkConfig homeworkConfig, DatabaseConfig databaseConfig) configs) {
 
-        var isFinished = bool.Parse(commandHandler.Next().Command);
+        bool isFinished;
+        try {isFinished = bool.Parse(commandHandler.Next().Command); } catch (Exception e) {
+            return [YourBotUtil.SendToFriendMessage(friendUin, configs.homeworkConfig.Priority, "wrong parameters")];
+        }
         bool result = false;
         int duration = 0;
         try
