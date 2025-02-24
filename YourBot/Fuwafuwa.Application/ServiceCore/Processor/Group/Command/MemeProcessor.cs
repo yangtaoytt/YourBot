@@ -137,7 +137,7 @@ public class MemeProcessor : IProcessorCore<GroupCommandData,
 
                 messageChainId = Convert.ToUInt32(result);
             }
-            var resultMessageChain = await Utils.YourBotUtil.GetMessageChain(messageChainId, configs.databaseConfig.ConnectionString);
+            var resultMessageChain = await Utils.YourBotUtil.GetMessageChain(messageChainId, configs.databaseConfig.ConnectionString, data.MessageChain.GroupUin);
 
             return [
                 CanSendGroupMessageAttribute.GetInstance()

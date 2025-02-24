@@ -226,7 +226,7 @@ public static partial class YourBotUtil {
         return result;
     }
     
-    private static async Task<MessageChain> GetMessageChain(uint messageChainId, MySqlConnection connection, MySqlTransaction transaction) {
+    private static async Task<MessageChain> GetMessageChain(uint messageChainId, MySqlConnection connection, MySqlTransaction transaction,uint? sender = null) {
         uint groupUin;
         uint? senderUin;
         string senderName;
@@ -248,7 +248,7 @@ public static partial class YourBotUtil {
         var imageMessages = await GetImageMessage(messageChainId, connection, transaction);
         var faceMessages = GetFaceMessage(messageChainId, connection, transaction);
         var multiMessages = await GetMultiMessage(messageChainId, connection, transaction);
-        var messageChain = MessageBuilder.Group((uint)groupUin).FriendName(senderName).FriendAvatar(senderAvatar).Build();
+        var messageChain = MessageBuilder.Group(sender ?? groupUin).FriendName(senderName).FriendAvatar(senderAvatar).Build();
         List<(uint sequence, IMessageEntity messageEntity)> allMessages = [];
         allMessages.AddRange(textMessages.Select(x => (x.sequence, (IMessageEntity)x.textEntity)));
         allMessages.AddRange(imageMessages.Select(x => (x.sequence, (IMessageEntity)x.imageEntity)));
@@ -263,13 +263,13 @@ public static partial class YourBotUtil {
     }
     
     
-    public static async Task<MessageChain> GetMessageChain(uint messageChainId, string connectionString) {
+    public static async Task<MessageChain> GetMessageChain(uint messageChainId, string connectionString, uint? groupUin = null) {
         await using var connection = new MySqlConnection(connectionString);
         connection.Open();
         await using var transaction = await connection.BeginTransactionAsync();
         MessageChain messageChain;
         try {
-            messageChain = await GetMessageChain(messageChainId, connection, transaction);
+            messageChain = await GetMessageChain(messageChainId, connection, transaction,groupUin);
         } catch (Exception) {
             await transaction.RollbackAsync();
             throw;

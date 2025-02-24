@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.RegularExpressions;
+using Fuwafuwa.Core.Container.Level3;
 using Fuwafuwa.Core.Data.SharedDataWrapper.Level2;
 using Fuwafuwa.Core.Env;
 using Fuwafuwa.Core.Log;
@@ -7,6 +9,7 @@ using Lagrange.Core;
 using Lagrange.Core.Common;
 using Lagrange.Core.Common.Entity;
 using Lagrange.Core.Event;
+using Lagrange.Core.Message.Entity;
 using Microsoft.Extensions.Logging;
 using YourBot.AI.Implement;
 using YourBot.AI.Interface;
@@ -15,10 +18,12 @@ using YourBot.Config.Implement;
 using YourBot.Config.Implement.Level1;
 using YourBot.Config.Implement.Level1.Service;
 using YourBot.Config.Implement.Level1.Service.Friend;
+using YourBot.Config.Implement.Level1.Service.Friend.Command;
 using YourBot.Config.Implement.Level1.Service.Group;
 using YourBot.Config.Implement.Level1.Service.Group.Command;
 using YourBot.Config.Implement.Level1.Service.Group.Command.Homework;
 using YourBot.Factory;
+using YourBot.Fuwafuwa.Application.Data;
 using YourBot.Fuwafuwa.Application.Data.ExecutorData;
 using YourBot.Fuwafuwa.Application.Data.ExecutorData.Friend;
 using YourBot.Fuwafuwa.Application.Data.ProcessorData;
@@ -112,6 +117,10 @@ public class BotApplication : IDisposable {
         ConfigManager.SignDefaultConfig<VersionConfig>();
         
         ConfigManager.SignDefaultConfig<ActorConfig>();
+        ConfigManager.SignDefaultConfig<HomeworkDeadlineRemindInputConfig>();
+        ConfigManager.SignDefaultConfig<SubmitCheckAndSaveConfig>();
+        ConfigManager.SignDefaultConfig<SubmitCollectConfig>();
+        ConfigManager.SignDefaultConfig<HomeworkConfig>();
 
         ConfigManager.GenerateDefaultConfigOnDisk(Path.Combine(".", "MainConfig.json"));
         return false;
@@ -153,7 +162,7 @@ public class BotApplication : IDisposable {
     }
 
     private async Task RunServices() {
-        const int serviceCount = 1;
+        const int serviceCount = 5;
 
         var closeAi = new CloseAI();
 
@@ -191,7 +200,7 @@ public class BotApplication : IDisposable {
             AsyncSharedDataWrapper<(IAI, AIReviewConfig)>, (IAI, AIReviewConfig)>(ServiceName.AIReviewProcessor,
             (closeAi,
                 _configManager.ReadConfig<AIReviewConfig>()));
-        await _serviceManager.SignPollingProcessor<AntiPlusOneProcessor, MessageData,
+        await _serviceManager.SignProcessor<AntiPlusOneProcessor, MessageData,QQUinDistributor<NullSharedDataWrapper<AntiPlusOneConfig>>,
             NullSharedDataWrapper<AntiPlusOneConfig>, AntiPlusOneConfig>(ServiceName.AntiPlusOneProcessor,
             _configManager.ReadConfig<AntiPlusOneConfig>());
 
@@ -200,7 +209,7 @@ public class BotApplication : IDisposable {
 
         await _serviceManager
             .SignPollingProcessor<FriendCommandProcessor, MessageData, NullSharedDataWrapper<object>, object>(
-                ServiceName.FriendEventProcessor, new object());
+                ServiceName.FriendCommandProcessor, new object());
         await _serviceManager.SignPollingProcessor<PingPongProcessor, GroupCommandData,
             NullSharedDataWrapper<PingPongConfig>, PingPongConfig>(ServiceName.PingPongProcessor,
             _configManager.ReadConfig<PingPongConfig>());
@@ -242,6 +251,52 @@ public class BotApplication : IDisposable {
         await _serviceManager
             .SignExecutor<SendMessage2FriendExecutor, SendMessage2FriendData, AsyncSharedDataWrapper<BotContext>,
                 BotContext>(ServiceName.SendMessage2FriendExecutor, _botContext);
+
+        var homeworkInput =
+            await _serviceManager
+                .SignInput<HomeworkDeadlineRemindInput, HomeworkDeadlineRemindInputData,
+                    NullSharedDataWrapper<HomeworkDeadlineRemindInputConfig>, HomeworkDeadlineRemindInputConfig>(
+                    ServiceName.HomeworkDeadlineRemindInput,
+                    _configManager.ReadConfig<HomeworkDeadlineRemindInputConfig>());
+
+        await _serviceManager.SignPollingProcessor<HomeworkDeadlineRemindProcessor, HomeworkData,
+            SimpleSharedDataWrapper<(DatabaseConfig config, HomeworkDeadlineRemindInputConfig remindConfig,
+                AsyncSharedDataWrapper<InputHandler<HomeworkDeadlineRemindInputData>> inputHandler,
+                List<(Task task, CancellationTokenSource cancellationTokenSource, uint id)> initTasks)>, (DatabaseConfig
+            , HomeworkDeadlineRemindInputConfig remindConfig,
+            AsyncSharedDataWrapper<InputHandler<HomeworkDeadlineRemindInputData>>)>(
+            ServiceName.HomeworkDeadlineRemindProcessor,
+            (_configManager.ReadConfig<DatabaseConfig>(),
+                _configManager.ReadConfig<HomeworkDeadlineRemindInputConfig>(),
+                new AsyncSharedDataWrapper<InputHandler<HomeworkDeadlineRemindInputData>>(homeworkInput)));
+
+        await _serviceManager
+            .SignPollingProcessor<HomeworkProcessor, FriendCommandData,
+                AsyncSharedDataWrapper<(HomeworkConfig homeworkConfig, DatabaseConfig databaseConfig, BotContext
+                    botContext)>, (HomeworkConfig homeworkConfig, DatabaseConfig databaseConfig, BotContext botContext
+                )>(ServiceName.HomeworkProcessor,
+                (_configManager.ReadConfig<HomeworkConfig>(), _configManager.ReadConfig<DatabaseConfig>(),
+                    _botContext));
+
+        await _serviceManager
+            .SignPollingProcessor<Message2CombineDataProcessor, MessageData, NullSharedDataWrapper<object>, object>(
+                ServiceName.Message2CombineDataProcessor, new object());
+
+        await _serviceManager
+            .SignPollingProcessor<SubmitCheckAndSaveProcessor, SubmitData,
+                NullSharedDataWrapper<(SubmitCheckAndSaveConfig submitConfig, DatabaseConfig databaseConfig)>, (
+                SubmitCheckAndSaveConfig submitConfig, DatabaseConfig databaseConfig)>(
+                ServiceName.SubmitCheckAndSaveProcessor,
+                (_configManager.ReadConfig<SubmitCheckAndSaveConfig>(), _configManager.ReadConfig<DatabaseConfig>()));
+
+
+        await _serviceManager.SignPollingProcessor<SubmitCollectProcessor, CombinedData,
+            SimpleSharedDataWrapper<(Dictionary<uint, (List<FileEntity> submit, List<Regex> regexes, uint homeworkId)>
+                dic, SubmitCollectConfig config)>, SubmitCollectConfig>(ServiceName.SubmitCollectProcessor,
+            _configManager.ReadConfig<SubmitCollectConfig>());
+        
+        
+        
 
 
         _botContext.Invoker.OnGroupMessageReceived += (sender, e) => { inputHandler.Input(e); };

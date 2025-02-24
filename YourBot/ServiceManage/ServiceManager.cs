@@ -37,7 +37,15 @@ public enum ServiceName {
     LogToConsoleExecutor,
     RevokeGroupMessageExecutor,
     MuteGroupMemberExecutor,
-    SendMessage2FriendExecutor
+    SendMessage2FriendExecutor,
+    
+    
+    HomeworkDeadlineRemindInput,
+    HomeworkDeadlineRemindProcessor,
+    HomeworkProcessor,
+    Message2CombineDataProcessor,
+    SubmitCheckAndSaveProcessor,
+    SubmitCollectProcessor
 }
 
 public class ServiceManager {
