@@ -2,7 +2,7 @@
 
 ##### NOTE:The development of YourBot is now slow down bacause the Fuwafuwa Frame need to be re-designed.In detail,the functional Implement isssue will not be resloved.Only the fatal bug will be fixed.
 
-##### NOTE:YourBot is still under primary develepment, so there is no Promise of robustness orc orrectness.
+##### NOTE:YourBot is still under primary develepment, so there is no Promise of robustness or orrectness.
 
 | Name           | Group Or Friend | introduction                                                 |
 | -------------- | --------------- | ------------------------------------------------------------ |
