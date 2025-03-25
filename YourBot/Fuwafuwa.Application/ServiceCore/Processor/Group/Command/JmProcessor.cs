@@ -7,6 +7,7 @@ using Fuwafuwa.Core.ServiceCore.Level3;
 using Fuwafuwa.Core.Subjects;
 using Lagrange.Core.Message;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.PixelFormats;
 using YourBot.Config.Implement.Level1.Service.Group.Command;
 using YourBot.Fuwafuwa.Application.Attribute.Executor;
@@ -17,7 +18,8 @@ using YourBot.Utils;
 
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group.Command;
 
-public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrapper<(JmConfig config, ConcurrentDictionary<uint, uint>)>, JmConfig> {
+public class JmProcessor : IProcessorCore<GroupCommandData,
+    NullSharedDataWrapper<(JmConfig config, ConcurrentDictionary<uint, uint>)>, JmConfig> {
     public static IServiceAttribute<GroupCommandData> GetServiceAttribute() {
         return ReadGroupCommandAttribute.GetInstance();
     }
@@ -27,7 +29,8 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
     }
 
 
-    public async Task<List<Certificate>> ProcessData(GroupCommandData data, NullSharedDataWrapper<(JmConfig config, ConcurrentDictionary<uint, uint>)> sharedData,
+    public async Task<List<Certificate>> ProcessData(GroupCommandData data,
+        NullSharedDataWrapper<(JmConfig config, ConcurrentDictionary<uint, uint>)> sharedData,
         Logger2Event? logger) {
         await Task.CompletedTask;
         var groupUin = data.GroupUin;
@@ -49,11 +52,11 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
         var startRandom = false;
         try {
             jmId = int.Parse(commandHandler.Next().Command);
-            if (int.TryParse(commandHandler.TryNext()?.Command, out var tempBlockSize)) {
+            var option = commandHandler.TryNext()?.Command;
+            if (int.TryParse(option, out var tempBlockSize)) {
                 commandBlockSize = tempBlockSize;
             }
-
-            if (commandHandler.TryNext()?.Command == "-r") {
+            if (option == "-r") {
                 startRandom = true;
             }
         } catch (Exception) {
@@ -71,12 +74,15 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
         }
     }
 
-    private static async Task<List<Certificate>> AutoMosaic(bool startRandom, int jmId, JmConfig config, uint groupUin, ConcurrentDictionary<uint, uint> history) {
-        
+    public static void Final(NullSharedDataWrapper<(JmConfig config, ConcurrentDictionary<uint, uint>)> sharedData,
+        Logger2Event? logger) { }
+
+    private static async Task<List<Certificate>> AutoMosaic(bool startRandom, int jmId, JmConfig config, uint groupUin,
+        ConcurrentDictionary<uint, uint> history) {
         var originalPath = Path.Combine(config.ImageDir, $"{jmId}");
         var autoMosaicPath = Path.Combine(config.ImageDir, $"{jmId}.auto");
         var autoLessMosaicPath = Path.Combine(config.ImageDir, $"{jmId}.auto.less");
-        
+
         try {
             if (!Directory.Exists(originalPath)) {
                 var (isSuccess, errorMsg) =
@@ -89,7 +95,7 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
                     return [YourBotUtil.SendToGroupMessage(groupUin, config.Priority, "jm:" + errorMsg)];
                 }
             }
-            
+
             if (!Directory.Exists(autoMosaicPath)) {
                 var files = new DirectoryInfo(originalPath).GetFiles();
                 foreach (var file in files) {
@@ -99,6 +105,7 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
                     ApplyMosaic(file.FullName, Path.Combine(autoMosaicPath, file.Name), autoBlockSize);
                 }
             }
+
             if (!Directory.Exists(autoLessMosaicPath)) {
                 var files = new DirectoryInfo(originalPath).GetFiles();
                 foreach (var file in files) {
@@ -124,12 +131,16 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
                     if (!startRandom) {
                         return MessageBuilder.Group(groupUin).Image(file.FullName).Build();
                     }
-                    var prize = DrawPrizeWrapper(config.Possibility, config.Guarantee,config.SmallGuarantee, history, groupUin);
+
+                    var prize = DrawPrizeWrapper(config.Possibility, config.Guarantee, config.SmallGuarantee, history,
+                        groupUin);
                     switch (prize) {
                         case Prize.First:
                             return MessageBuilder.Group(groupUin).Image(Path.Combine(originalPath, file.Name)).Build();
                         case Prize.Second:
-                            return MessageBuilder.Group(groupUin).Image(Path.Combine(autoLessMosaicPath, file.Name)).Build();
+                            return MessageBuilder.Group(groupUin)
+                                .Image(Path.Combine(autoLessMosaicPath, file.Name))
+                                .Build();
                         case Prize.None:
                         default:
                             return MessageBuilder.Group(groupUin).Image(file.FullName).Build();
@@ -151,10 +162,9 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
     }
 
     private static async Task<List<Certificate>> Mosaic(int jmId, int blockSize, JmConfig config, uint groupUin) {
-        
         var originalPath = Path.Combine(config.ImageDir, $"{jmId}");
         var mosaicPath = Path.Combine(originalPath, $"{jmId}.{blockSize.ToString()}");
-        
+
         try {
             if (!Directory.Exists(originalPath)) {
                 var (isSuccess, errorMsg) =
@@ -167,7 +177,7 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
                     return [YourBotUtil.SendToGroupMessage(groupUin, config.Priority, "jm:" + errorMsg)];
                 }
             }
-            
+
             if (!Directory.Exists(mosaicPath)) {
                 var files = new DirectoryInfo(originalPath).GetFiles();
                 foreach (var file in files) {
@@ -243,34 +253,30 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
                     message))
         ];
     }
-    
-    
 
-    enum Prize {
-        None,
-        First,
-        Second,
-    }
-
-    private static Prize DrawPrizeWrapper(float possibility, int guarantee,int smallGuarantee, ConcurrentDictionary<uint, uint> history,
+    private static Prize DrawPrizeWrapper(float possibility, int guarantee, int smallGuarantee,
+        ConcurrentDictionary<uint, uint> history,
         uint groupUin) {
-        var res = DrawPrize(possibility, guarantee,smallGuarantee, history, groupUin);
+        var res = DrawPrize(possibility, guarantee, smallGuarantee, history, groupUin);
         if (res == Prize.First) {
             history[groupUin] = 0;
         }
+
         return res;
     }
 
-    private static Prize DrawPrize(float possibility, int guarantee,int smallGuarantee, ConcurrentDictionary<uint, uint> history,
+    private static Prize DrawPrize(float possibility, int guarantee, int smallGuarantee,
+        ConcurrentDictionary<uint, uint> history,
         uint groupUin) {
         history.TryAdd(groupUin, 0);
         ++history[groupUin];
-        
+
         if (guarantee > 0) {
             if (history[groupUin] == guarantee) {
                 return Prize.First;
             }
         }
+
         if (smallGuarantee > 0) {
             if (history[groupUin] % smallGuarantee == 0) {
                 return Prize.Second;
@@ -283,20 +289,21 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
     }
 
     public static int CalculateOptimalBlockSize(int imageWidth, int imageHeight, float density = 0.3f) {
-        if (density <= 0)
+        if (density <= 0) {
             throw new ArgumentException("Density must be between 0.1 and infinity");
-        
-        float geometricMean = MathF.Sqrt(imageWidth * imageHeight);
+        }
 
-        float baseSize = geometricMean / (20f * density);
+        var geometricMean = MathF.Sqrt(imageWidth * imageHeight);
 
-        int blockSize = (int)MathF.Round(baseSize);
+        var baseSize = geometricMean / (20f * density);
+
+        var blockSize = (int)MathF.Round(baseSize);
         blockSize = Math.Max(4, blockSize);
         blockSize = Math.Min(100, blockSize);
-        
+
         return blockSize % 2 == 0 ? blockSize + 1 : blockSize;
     }
-    
+
     private static async Task<(bool isSuccess, string errorMsg)> FetchImages(int jmId, string optionFilePath,
         string workingDir) {
         var downloadSuccess = false;
@@ -375,32 +382,43 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
         }
     }
 
-    
+
     private static void ApplyMosaic(string inputPath, string outputPath, int blockSize) {
         if (blockSize < 1) {
             throw new ArgumentException("Block size must be at least 1");
         }
 
-        using var image = Image.Load<Rgba32>(inputPath);
-        for (var y = 0; y < image.Height; y += blockSize) {
-            for (var x = 0; x < image.Width; x += blockSize) {
-                var currentBlockWidth = Math.Min(blockSize, image.Width - x);
-                var currentBlockHeight = Math.Min(blockSize, image.Height - y);
-                
-                var averageColor = CalculateAverageColor(image, x, y, currentBlockWidth, currentBlockHeight);
-                
-                FillBlock(image, x, y, currentBlockWidth, currentBlockHeight, averageColor);
-            }
-        }
+        var options = new JpegEncoder {
+            Quality = 75, // 降低质量参数（1-100），默认75
+            ColorType = JpegEncodingColor.YCbCrRatio444 // 使用更适合压缩的色彩空间
+        };
 
-        var outDir = Path.GetDirectoryName(outputPath);
-        if (!Directory.Exists(outDir)) {
-            Directory.CreateDirectory(outDir!);
+        using (var image = Image.Load<Rgba32>(inputPath)) {
+            // 使用并行处理优化性能
+            Parallel.For(0, (image.Height + blockSize - 1) / blockSize, blockY => {
+                var y = blockY * blockSize;
+                var currentBlockHeight = Math.Min(blockSize, image.Height - y);
+
+                for (var x = 0; x < image.Width; x += blockSize) {
+                    var currentBlockWidth = Math.Min(blockSize, image.Width - x);
+                    var averageColor =
+                        CalculateAverageColorOptimized(image, x, y, currentBlockWidth, currentBlockHeight);
+                    FillBlockOptimized(image, x, y, currentBlockWidth, currentBlockHeight, averageColor);
+                }
+            });
+
+            var outDir = Path.GetDirectoryName(outputPath);
+            if (!Directory.Exists(outDir)) {
+                Directory.CreateDirectory(outDir!);
+            }
+
+            // 使用优化的编码参数保存
+            image.Save(outputPath, options);
         }
-        image.Save(outputPath);
     }
 
-    private static Rgba32 CalculateAverageColor(
+// 优化后的平均颜色计算方法
+    private static Rgba32 CalculateAverageColorOptimized(
         Image<Rgba32> image,
         int startX,
         int startY,
@@ -409,14 +427,17 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
         long totalR = 0, totalG = 0, totalB = 0;
         var pixelCount = width * height;
 
-        for (var y = startY; y < startY + height; y++) {
-            for (var x = startX; x < startX + width; x++) {
-                var pixel = image[x, y];
-                totalR += pixel.R;
-                totalG += pixel.G;
-                totalB += pixel.B;
+        // 旧版ImageSharp的像素访问方式
+        image.ProcessPixelRows(accessor => {
+            for (var y = startY; y < startY + height; y++) {
+                var row = accessor.GetRowSpan(y);
+                for (var x = startX; x < startX + width; x++) {
+                    totalR += row[x].R;
+                    totalG += row[x].G;
+                    totalB += row[x].B;
+                }
             }
-        }
+        });
 
         return new Rgba32(
             (byte)(totalR / pixelCount),
@@ -424,19 +445,29 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
             (byte)(totalB / pixelCount));
     }
 
-    private static void FillBlock(
+// 优化后的块填充方法
+    private static void FillBlockOptimized(
         Image<Rgba32> image,
         int startX,
         int startY,
         int width,
         int height,
         Rgba32 color) {
-        for (var y = startY; y < startY + height; y++) {
-            for (var x = startX; x < startX + width; x++) {
-                image[x, y] = color;
+        // 方法2：使用 ProcessPixelRows (兼容v1.x)
+        image.ProcessPixelRows(accessor => {
+            for (var y = startY; y < startY + height; y++) {
+                var row = accessor.GetRowSpan(y);
+                for (var x = startX; x < startX + width; x++) {
+                    row[x] = color;
+                }
             }
-        }
+        });
     }
 
-    public static void Final(NullSharedDataWrapper<(JmConfig config, ConcurrentDictionary<uint, uint>)> sharedData, Logger2Event? logger) { }
+
+    private enum Prize {
+        None,
+        First,
+        Second
+    }
 }
