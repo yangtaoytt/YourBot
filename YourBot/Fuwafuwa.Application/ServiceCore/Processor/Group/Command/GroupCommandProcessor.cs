@@ -8,6 +8,7 @@ using Lagrange.Core.Message.Entity;
 using YourBot.Fuwafuwa.Application.Attribute.Processor;
 using YourBot.Fuwafuwa.Application.Data.ProcessorData;
 using YourBot.Utils;
+using YourBot.Utils.Command;
 
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group.Command;
 
@@ -40,16 +41,22 @@ public class GroupCommandProcessor : IProcessorCore<MessageData, NullSharedDataW
 
         var textEntity = (messageChain[commandMessageIndex] as TextEntity)!;
         var index = textEntity.Text.IndexOf('/');
-        var words = textEntity.Text[(index + 1)..].Split(' ');
+        var wordsOld = textEntity.Text[(index + 1)..].Split(' ');
+        var wordsList = wordsOld.Select(item => item.Trim()).ToList();
+        if (wordsList.Count == 0) {
+            return [];
+        }
+        var commandHandler = new CommandHandler(wordsList);
 
-        var command = words[0];
-        var commandData = new GroupCommandData(command, messageChain, words.Length > 1?words[1..].ToList() : [], messageChain.GroupUin!.Value);
+        var command = wordsOld[0];
+        var commandData = new GroupCommandData(command, messageChain, wordsOld.Length > 1 ? wordsOld[1..].ToList() : [],
+            messageChain.GroupUin!.Value, commandHandler);
 
         return [
             ReadGroupCommandAttribute.GetInstance().GetCertificate(commandData)
         ];
     }
-    
+
     private static bool CheckAt(MessageChain messageChain, string name, uint botUin) {
         foreach (var message in messageChain) {
             if (message is MentionEntity mentionEntity && mentionEntity.Uin == botUin) {
@@ -63,6 +70,4 @@ public class GroupCommandProcessor : IProcessorCore<MessageData, NullSharedDataW
 
         return false;
     }
-
-
 }

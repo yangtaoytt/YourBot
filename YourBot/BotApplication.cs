@@ -6,7 +6,6 @@ using Fuwafuwa.Core.Env;
 using Fuwafuwa.Core.Log;
 using Fuwafuwa.Core.Log.LogEventArgs.Interface;
 using Lagrange.Core;
-using Lagrange.Core.Common;
 using Lagrange.Core.Common.Entity;
 using Lagrange.Core.Event;
 using Lagrange.Core.Message.Entity;
@@ -14,7 +13,6 @@ using Microsoft.Extensions.Logging;
 using YourBot.AI.Implement;
 using YourBot.AI.Interface;
 using YourBot.Config;
-using YourBot.Config.Implement;
 using YourBot.Config.Implement.Level1;
 using YourBot.Config.Implement.Level1.Service;
 using YourBot.Config.Implement.Level1.Service.Friend;
@@ -50,8 +48,8 @@ public class BotApplication : IDisposable {
     private const int NameMaxWidth = 25; // > 3
     private const int ModuleMaxWidth = 12; // > 3
     private readonly AppConfig _appConfig;
-    private readonly BotAppInfoAgentConfig _botAppInfo;
     private readonly AppLogger _appLogger;
+    private readonly BotAppInfoAgentConfig _botAppInfo;
     private readonly BotConfigAgentConfig _botConfig;
 
     private readonly BotContext _botContext;
@@ -69,7 +67,7 @@ public class BotApplication : IDisposable {
         if (!CheckConfig(mainConfigPath)) {
             throw new Exception("Config file not found, default config generated.Please fill in the config file.");
         }
-        
+
         _configManager = new ConfigManager(mainConfigPath);
 
         _appConfig = _configManager.ReadConfig<AppConfig>();
@@ -91,17 +89,28 @@ public class BotApplication : IDisposable {
         _botContext = appFactory.CreateBotContext();
     }
 
+    public void Dispose() {
+        _serviceManager?.Env.Close();
+
+        _configManager.WriteConfig(_appConfig);
+        _configManager.WriteConfig(_deviceInfo);
+        _configManager.WriteConfig(_keystore);
+        _configManager.WriteConfig(_botConfig);
+        _configManager.WriteConfig(_botAppInfo);
+    }
+
     private static bool CheckConfig(string mainConfigPath) {
         if (File.Exists(mainConfigPath)) {
             return true;
         }
+
         ConfigManager.SignDefaultConfig<AppConfig>();
         ConfigManager.SignDefaultConfig<BotAppInfoAgentConfig>();
         ConfigManager.SignDefaultConfig<BotConfigAgentConfig>();
         ConfigManager.SignDefaultConfig<BotDeviceInfoAgentConfig>();
         ConfigManager.SignDefaultConfig<BotKeyStoreAgentConfig>();
         ConfigManager.SignDefaultConfig<DatabaseConfig>();
-        
+
         ConfigManager.SignDefaultConfig<ServiceManagerConfig>();
 
         ConfigManager.SignDefaultConfig<AIReviewConfig>();
@@ -115,25 +124,17 @@ public class BotApplication : IDisposable {
         ConfigManager.SignDefaultConfig<PingPongConfig>();
         ConfigManager.SignDefaultConfig<ServiceRunConfig>();
         ConfigManager.SignDefaultConfig<VersionConfig>();
-        
+
         ConfigManager.SignDefaultConfig<ActorConfig>();
         ConfigManager.SignDefaultConfig<HomeworkDeadlineRemindInputConfig>();
         ConfigManager.SignDefaultConfig<SubmitCheckAndSaveConfig>();
         ConfigManager.SignDefaultConfig<SubmitCollectConfig>();
         ConfigManager.SignDefaultConfig<HomeworkConfig>();
+        
+        ConfigManager.SignDefaultConfig<JmConfig>();
 
         ConfigManager.GenerateDefaultConfigOnDisk(Path.Combine(".", "MainConfig.json"));
         return false;
-    }
-
-    public void Dispose() {
-        _serviceManager?.Env.Close();
-        
-        _configManager.WriteConfig(_appConfig);
-        _configManager.WriteConfig(_deviceInfo);
-        _configManager.WriteConfig(_keystore);
-        _configManager.WriteConfig(_botConfig);
-        _configManager.WriteConfig(_botAppInfo);
     }
 
     public async Task Run() {
@@ -196,16 +197,21 @@ public class BotApplication : IDisposable {
                 Dictionary<uint, (BotGroup, List<BotGroupMember>?)>)>, (AppLogger, BotContext,
             GroupMessageLogConfig)>(ServiceName.GroupMessageLogProcessor, (_appLogger, _botContext,
             _configManager.ReadConfig<GroupMessageLogConfig>()));
-        await _serviceManager.SignProcessor<AIReviewProcessor, MessageData, QQUinDistributor<AsyncSharedDataWrapper<(IAI, AIReviewConfig)>>,
-            AsyncSharedDataWrapper<(IAI, AIReviewConfig)>, (IAI, AIReviewConfig)>(ServiceName.AIReviewProcessor,
-            (closeAi,
-                _configManager.ReadConfig<AIReviewConfig>()));
-        await _serviceManager.SignProcessor<AntiPlusOneProcessor, MessageData,QQUinDistributor<NullSharedDataWrapper<AntiPlusOneConfig>>,
-            NullSharedDataWrapper<AntiPlusOneConfig>, AntiPlusOneConfig>(ServiceName.AntiPlusOneProcessor,
-            _configManager.ReadConfig<AntiPlusOneConfig>());
+        await _serviceManager
+            .SignProcessor<AIReviewProcessor, MessageData,
+                QQUinDistributor<AsyncSharedDataWrapper<(IAI, AIReviewConfig)>>,
+                AsyncSharedDataWrapper<(IAI, AIReviewConfig)>, (IAI, AIReviewConfig)>(ServiceName.AIReviewProcessor,
+                (closeAi,
+                    _configManager.ReadConfig<AIReviewConfig>()));
+        await _serviceManager
+            .SignProcessor<AntiPlusOneProcessor, MessageData, QQUinDistributor<NullSharedDataWrapper<AntiPlusOneConfig>>
+                ,
+                NullSharedDataWrapper<AntiPlusOneConfig>, AntiPlusOneConfig>(ServiceName.AntiPlusOneProcessor,
+                _configManager.ReadConfig<AntiPlusOneConfig>());
 
-        await _serviceManager.SignPollingProcessor<GroupCommandProcessor, MessageData, NullSharedDataWrapper<(string, uint)>,
-            BotContext>(ServiceName.GroupCommandProcessor, _botContext);
+        await _serviceManager
+            .SignPollingProcessor<GroupCommandProcessor, MessageData, NullSharedDataWrapper<(string, uint)>,
+                BotContext>(ServiceName.GroupCommandProcessor, _botContext);
 
         await _serviceManager
             .SignPollingProcessor<FriendCommandProcessor, MessageData, NullSharedDataWrapper<object>, object>(
@@ -213,9 +219,11 @@ public class BotApplication : IDisposable {
         await _serviceManager.SignPollingProcessor<PingPongProcessor, GroupCommandData,
             NullSharedDataWrapper<PingPongConfig>, PingPongConfig>(ServiceName.PingPongProcessor,
             _configManager.ReadConfig<PingPongConfig>());
-        await _serviceManager.SignPollingProcessor<VersionProcessor, GroupCommandData, NullSharedDataWrapper<(VersionConfig versionConfig, DatabaseConfig databaseConfig)>
-            , (VersionConfig versionConfig, DatabaseConfig databaseConfig)>(ServiceName.VersionProcessor,
-            (_configManager.ReadConfig<VersionConfig>(), _configManager.ReadConfig<DatabaseConfig>()));
+        await _serviceManager
+            .SignPollingProcessor<VersionProcessor, GroupCommandData, NullSharedDataWrapper<(VersionConfig versionConfig
+                    , DatabaseConfig databaseConfig)>
+                , (VersionConfig versionConfig, DatabaseConfig databaseConfig)>(ServiceName.VersionProcessor,
+                (_configManager.ReadConfig<VersionConfig>(), _configManager.ReadConfig<DatabaseConfig>()));
         await _serviceManager.SignPollingProcessor<MemeProcessor, GroupCommandData,
             AsyncSharedDataWrapper<(BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
                 configs)>, (BotContext botContext, (MemeConfig memeConfig, DatabaseConfig databaseConfig)
@@ -232,12 +240,15 @@ public class BotApplication : IDisposable {
                     _configManager.ReadConfig<ServiceRunConfig>()));
         await _serviceManager
             .SignProcessor<AntiFloodProcessor, MessageData, QQUinDistributor<NullSharedDataWrapper<AntiFloodConfig>>,
-                NullSharedDataWrapper<AntiFloodConfig>, AntiFloodConfig>(ServiceName.AntiFloodProcessor,_configManager.ReadConfig<AntiFloodConfig>());
+                NullSharedDataWrapper<AntiFloodConfig>, AntiFloodConfig>(ServiceName.AntiFloodProcessor,
+                _configManager.ReadConfig<AntiFloodConfig>());
         await _serviceManager
             .SignPollingProcessor<ActorProcessor, FriendCommandData,
-                AsyncSharedDataWrapper<(ActorConfig actorConfig, DatabaseConfig databaseConfig, BotContext botContext, Dictionary<uint, string> userUinToName)>, (ActorConfig
-                actorConfig, DatabaseConfig databaseConfig, BotContext botContext)>(ServiceName.ActorProcessor,(_configManager.ReadConfig<ActorConfig>(),
-                _configManager.ReadConfig<DatabaseConfig>(),_botContext));
+                AsyncSharedDataWrapper<(ActorConfig actorConfig, DatabaseConfig databaseConfig, BotContext botContext,
+                    Dictionary<uint, string> userUinToName)>, (ActorConfig
+                actorConfig, DatabaseConfig databaseConfig, BotContext botContext)>(ServiceName.ActorProcessor,
+                (_configManager.ReadConfig<ActorConfig>(),
+                    _configManager.ReadConfig<DatabaseConfig>(), _botContext));
 
         await _serviceManager.SignExecutor<SendGroupMessageExecutor, SendToGroupMessageData,
             AsyncSharedDataWrapper<BotContext>, BotContext>(ServiceName.SendGroupMessageExecutor, _botContext);
@@ -294,9 +305,11 @@ public class BotApplication : IDisposable {
             SimpleSharedDataWrapper<(Dictionary<uint, (List<FileEntity> submit, List<Regex> regexes, uint homeworkId)>
                 dic, SubmitCollectConfig config)>, SubmitCollectConfig>(ServiceName.SubmitCollectProcessor,
             _configManager.ReadConfig<SubmitCollectConfig>());
-        
-        
-        
+
+
+        await _serviceManager
+            .SignPollingProcessor<JmProcessor, GroupCommandData, NullSharedDataWrapper<JmConfig>, JmConfig>(
+                ServiceName.JmProcessor, _configManager.ReadConfig<JmConfig>());
 
 
         _botContext.Invoker.OnGroupMessageReceived += (sender, e) => { inputHandler.Input(e); };

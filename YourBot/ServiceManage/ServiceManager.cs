@@ -45,7 +45,9 @@ public enum ServiceName {
     HomeworkProcessor,
     Message2CombineDataProcessor,
     SubmitCheckAndSaveProcessor,
-    SubmitCollectProcessor
+    SubmitCollectProcessor,
+    
+    JmProcessor
 }
 
 public class ServiceManager {
