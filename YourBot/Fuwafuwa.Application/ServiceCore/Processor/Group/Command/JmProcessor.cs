@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Fuwafuwa.Core.Attributes.ServiceAttribute.Level0;
 using Fuwafuwa.Core.Data.SharedDataWrapper.Level2;
@@ -16,23 +17,22 @@ using YourBot.Utils;
 
 namespace YourBot.Fuwafuwa.Application.ServiceCore.Processor.Group.Command;
 
-public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrapper<JmConfig>, JmConfig> {
+public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrapper<(JmConfig config, ConcurrentDictionary<uint, uint>)>, JmConfig> {
     public static IServiceAttribute<GroupCommandData> GetServiceAttribute() {
         return ReadGroupCommandAttribute.GetInstance();
     }
 
-    public static NullSharedDataWrapper<JmConfig> Init(JmConfig initData) {
-        return new NullSharedDataWrapper<JmConfig>(initData);
+    public static NullSharedDataWrapper<(JmConfig config, ConcurrentDictionary<uint, uint>)> Init(JmConfig initData) {
+        return new NullSharedDataWrapper<(JmConfig config, ConcurrentDictionary<uint, uint>)>((initData, []));
     }
 
-    public static void Final(NullSharedDataWrapper<JmConfig> sharedData, Logger2Event? logger) { }
 
-    public async Task<List<Certificate>> ProcessData(GroupCommandData data, NullSharedDataWrapper<JmConfig> sharedData,
+    public async Task<List<Certificate>> ProcessData(GroupCommandData data, NullSharedDataWrapper<(JmConfig config, ConcurrentDictionary<uint, uint>)> sharedData,
         Logger2Event? logger) {
         await Task.CompletedTask;
         var groupUin = data.GroupUin;
 
-        var config = sharedData.Execute(reference => reference.Value);
+        var (config, history) = sharedData.Execute(reference => reference.Value);
 
         if (!YourBotUtil.CheckSimpleGroupPermission(config, groupUin)) {
             return [];
@@ -46,24 +46,121 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
 
         int jmId;
         int? commandBlockSize = null;
+        var startRandom = false;
         try {
             jmId = int.Parse(commandHandler.Next().Command);
             if (int.TryParse(commandHandler.TryNext()?.Command, out var tempBlockSize)) {
                 commandBlockSize = tempBlockSize;
             }
+
+            if (commandHandler.TryNext()?.Command == "-r") {
+                startRandom = true;
+            }
         } catch (Exception) {
             return [YourBotUtil.SendToGroupMessage(groupUin, config.Priority, "wrong parameters")];
         }
-        var basePath = Path.Combine(config.ImageDir, $"{jmId}");
 
-        var blockSizeStr = commandBlockSize != null ? commandBlockSize.ToString() : "auto";
-        var mosaicPath = Path.Combine(config.ImageDir, $"{jmId}.{blockSizeStr}");
         try {
-            if (!Directory.Exists(basePath)) {
+            return commandBlockSize switch {
+                null => await AutoMosaic(startRandom, jmId, config, groupUin, history),
+                -1 => await Original(jmId, config, groupUin),
+                _ => await Mosaic(jmId, commandBlockSize.Value, config, groupUin)
+            };
+        } catch (Exception e) {
+            return [YourBotUtil.SendToGroupMessage(groupUin, config.Priority, "Encountered an issue: " + e.Message)];
+        }
+    }
+
+    private static async Task<List<Certificate>> AutoMosaic(bool startRandom, int jmId, JmConfig config, uint groupUin, ConcurrentDictionary<uint, uint> history) {
+        
+        var originalPath = Path.Combine(config.ImageDir, $"{jmId}");
+        var autoMosaicPath = Path.Combine(config.ImageDir, $"{jmId}.auto");
+        var autoLessMosaicPath = Path.Combine(config.ImageDir, $"{jmId}.auto.less");
+        
+        try {
+            if (!Directory.Exists(originalPath)) {
                 var (isSuccess, errorMsg) =
                     await FetchImages(jmId, config.OptionFilePath, Environment.CurrentDirectory);
-                if (!isSuccess && Directory.Exists(basePath)) {
-                    Directory.Delete(basePath, true);
+                if (!isSuccess && Directory.Exists(originalPath)) {
+                    Directory.Delete(originalPath, true);
+                }
+
+                if (!isSuccess) {
+                    return [YourBotUtil.SendToGroupMessage(groupUin, config.Priority, "jm:" + errorMsg)];
+                }
+            }
+            
+            if (!Directory.Exists(autoMosaicPath)) {
+                var files = new DirectoryInfo(originalPath).GetFiles();
+                foreach (var file in files) {
+                    var imageInfo = await Image.IdentifyAsync(file.FullName);
+                    var autoBlockSize = CalculateOptimalBlockSize(imageInfo.Width,
+                        imageInfo.Height, config.AutoDensity);
+                    ApplyMosaic(file.FullName, Path.Combine(autoMosaicPath, file.Name), autoBlockSize);
+                }
+            }
+            if (!Directory.Exists(autoLessMosaicPath)) {
+                var files = new DirectoryInfo(originalPath).GetFiles();
+                foreach (var file in files) {
+                    var imageInfo = await Image.IdentifyAsync(file.FullName);
+                    var lessAutoBlockSize = CalculateOptimalBlockSize(imageInfo.Width,
+                        imageInfo.Height, config.LessAutoDensity);
+                    ApplyMosaic(file.FullName, Path.Combine(autoLessMosaicPath, file.Name), lessAutoBlockSize);
+                }
+            }
+        } catch (Exception e) {
+            return [
+                YourBotUtil.SendToGroupMessage(groupUin, config.Priority,
+                    "Encountered an issue while process image: " + e.Message)
+            ];
+        }
+
+        var messageChains = new List<MessageChain>();
+        var dir = new DirectoryInfo(autoMosaicPath);
+        try {
+            var files = dir.GetFiles();
+            messageChains.AddRange(files.OrderBy(f => f.Name)
+                .Select(file => {
+                    if (!startRandom) {
+                        return MessageBuilder.Group(groupUin).Image(file.FullName).Build();
+                    }
+                    var prize = DrawPrizeWrapper(config.Possibility, config.Guarantee,config.SmallGuarantee, history, groupUin);
+                    switch (prize) {
+                        case Prize.First:
+                            return MessageBuilder.Group(groupUin).Image(Path.Combine(originalPath, file.Name)).Build();
+                        case Prize.Second:
+                            return MessageBuilder.Group(groupUin).Image(Path.Combine(autoLessMosaicPath, file.Name)).Build();
+                        case Prize.None:
+                        default:
+                            return MessageBuilder.Group(groupUin).Image(file.FullName).Build();
+                    }
+                }));
+        } catch (Exception e) {
+            return [
+                YourBotUtil.SendToGroupMessage(groupUin, config.Priority,
+                    "Encountered an issue while send image: " + e.Message)
+            ];
+        }
+
+        var message = MessageBuilder.Group(groupUin).MultiMsg(messageChains.ToArray()).Build();
+        return [
+            CanSendGroupMessageAttribute.GetInstance()
+                .GetCertificate(new SendToGroupMessageData(new Priority(config.Priority, PriorityStrategy.Share),
+                    message))
+        ];
+    }
+
+    private static async Task<List<Certificate>> Mosaic(int jmId, int blockSize, JmConfig config, uint groupUin) {
+        
+        var originalPath = Path.Combine(config.ImageDir, $"{jmId}");
+        var mosaicPath = Path.Combine(originalPath, $"{jmId}.{blockSize.ToString()}");
+        
+        try {
+            if (!Directory.Exists(originalPath)) {
+                var (isSuccess, errorMsg) =
+                    await FetchImages(jmId, config.OptionFilePath, Environment.CurrentDirectory);
+                if (!isSuccess && Directory.Exists(originalPath)) {
+                    Directory.Delete(originalPath, true);
                 }
 
                 if (!isSuccess) {
@@ -72,17 +169,9 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
             }
             
             if (!Directory.Exists(mosaicPath)) {
-                var files = new DirectoryInfo(basePath).GetFiles();
+                var files = new DirectoryInfo(originalPath).GetFiles();
                 foreach (var file in files) {
-                    int blockSize = 0;
-                    if (commandBlockSize != null) {
-                        blockSize = commandBlockSize.Value;
-                    } else {
-                        var imageInfo = await Image.IdentifyAsync(file.FullName);
-                        blockSize = CalculateOptimalBlockSize(imageInfo.Width,
-                            imageInfo.Height);
-                    }
-                    ApplyMosaic(file.FullName, file.FullName.Replace($"{jmId}", $"{jmId}.{blockSizeStr}"), blockSize);
+                    ApplyMosaic(file.FullName, Path.Combine(mosaicPath, file.Name), blockSize);
                 }
             }
         } catch (Exception e) {
@@ -113,9 +202,89 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
         ];
     }
 
+    private static async Task<List<Certificate>> Original(int jmId, JmConfig config, uint groupUin) {
+        var originalPath = Path.Combine(config.ImageDir, $"{jmId}");
+        try {
+            if (!Directory.Exists(originalPath)) {
+                var (isSuccess, errorMsg) =
+                    await FetchImages(jmId, config.OptionFilePath, Environment.CurrentDirectory);
+                if (!isSuccess && Directory.Exists(originalPath)) {
+                    Directory.Delete(originalPath, true);
+                }
+
+                if (!isSuccess) {
+                    return [YourBotUtil.SendToGroupMessage(groupUin, config.Priority, "jm:" + errorMsg)];
+                }
+            }
+        } catch (Exception e) {
+            return [
+                YourBotUtil.SendToGroupMessage(groupUin, config.Priority,
+                    "Encountered an issue while process image: " + e.Message)
+            ];
+        }
+
+        var messageChains = new List<MessageChain>();
+        var dir = new DirectoryInfo(originalPath);
+        try {
+            var files = dir.GetFiles();
+            messageChains.AddRange(files.OrderBy(f => f.Name)
+                .Select(file => MessageBuilder.Group(groupUin).Image(file.FullName).Build()));
+        } catch (Exception e) {
+            return [
+                YourBotUtil.SendToGroupMessage(groupUin, config.Priority,
+                    "Encountered an issue while send image: " + e.Message)
+            ];
+        }
+
+        var message = MessageBuilder.Group(groupUin).MultiMsg(messageChains.ToArray()).Build();
+        return [
+            CanSendGroupMessageAttribute.GetInstance()
+                .GetCertificate(new SendToGroupMessageData(new Priority(config.Priority, PriorityStrategy.Share),
+                    message))
+        ];
+    }
+    
+    
+
+    enum Prize {
+        None,
+        First,
+        Second,
+    }
+
+    private static Prize DrawPrizeWrapper(float possibility, int guarantee,int smallGuarantee, ConcurrentDictionary<uint, uint> history,
+        uint groupUin) {
+        var res = DrawPrize(possibility, guarantee,smallGuarantee, history, groupUin);
+        if (res == Prize.First) {
+            history[groupUin] = 0;
+        }
+        return res;
+    }
+
+    private static Prize DrawPrize(float possibility, int guarantee,int smallGuarantee, ConcurrentDictionary<uint, uint> history,
+        uint groupUin) {
+        history.TryAdd(groupUin, 0);
+        ++history[groupUin];
+        
+        if (guarantee > 0) {
+            if (history[groupUin] == guarantee) {
+                return Prize.First;
+            }
+        }
+        if (smallGuarantee > 0) {
+            if (history[groupUin] % smallGuarantee == 0) {
+                return Prize.Second;
+            }
+        }
+
+        var random = new Random();
+        var randomValue = random.NextDouble();
+        return possibility > randomValue ? Prize.First : Prize.None;
+    }
+
     public static int CalculateOptimalBlockSize(int imageWidth, int imageHeight, float density = 0.3f) {
-        if (density <= 0 || density > 1)
-            throw new ArgumentException("Density must be between 0.1 and 1.0");
+        if (density <= 0)
+            throw new ArgumentException("Density must be between 0.1 and infinity");
         
         float geometricMean = MathF.Sqrt(imageWidth * imageHeight);
 
@@ -268,4 +437,6 @@ public class JmProcessor : IProcessorCore<GroupCommandData, NullSharedDataWrappe
             }
         }
     }
+
+    public static void Final(NullSharedDataWrapper<(JmConfig config, ConcurrentDictionary<uint, uint>)> sharedData, Logger2Event? logger) { }
 }

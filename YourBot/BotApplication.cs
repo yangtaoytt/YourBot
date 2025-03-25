@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 using System.Text.RegularExpressions;
 using Fuwafuwa.Core.Container.Level3;
@@ -308,7 +309,7 @@ public class BotApplication : IDisposable {
 
 
         await _serviceManager
-            .SignPollingProcessor<JmProcessor, GroupCommandData, NullSharedDataWrapper<JmConfig>, JmConfig>(
+            .SignPollingProcessor<JmProcessor,GroupCommandData, NullSharedDataWrapper<(JmConfig config, ConcurrentDictionary<uint, uint>)>, JmConfig>(
                 ServiceName.JmProcessor, _configManager.ReadConfig<JmConfig>());
 
 
