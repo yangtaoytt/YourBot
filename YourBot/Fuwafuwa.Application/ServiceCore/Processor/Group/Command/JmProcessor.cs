@@ -132,7 +132,7 @@ public class JmProcessor : IProcessorCore<GroupCommandData,
                         return MessageBuilder.Group(groupUin).Image(file.FullName).Build();
                     }
 
-                    var prize = DrawPrizeWrapper(config.Possibility, config.Guarantee, config.SmallGuarantee, history,
+                    var prize = DrawPrizeWrapper(config.Possibility, config.SmallPossibility,config.Guarantee, config.SmallGuarantee, history,
                         groupUin);
                     switch (prize) {
                         case Prize.First:
@@ -254,10 +254,10 @@ public class JmProcessor : IProcessorCore<GroupCommandData,
         ];
     }
 
-    private static Prize DrawPrizeWrapper(float possibility, int guarantee, int smallGuarantee,
+    private static Prize DrawPrizeWrapper(float possibility,float smallPossibility, int guarantee, int smallGuarantee,
         ConcurrentDictionary<uint, uint> history,
         uint groupUin) {
-        var res = DrawPrize(possibility, guarantee, smallGuarantee, history, groupUin);
+        var res = DrawPrize(possibility, smallPossibility,guarantee, smallGuarantee, history, groupUin);
         if (res == Prize.First) {
             history[groupUin] = 0;
         }
@@ -265,7 +265,7 @@ public class JmProcessor : IProcessorCore<GroupCommandData,
         return res;
     }
 
-    private static Prize DrawPrize(float possibility, int guarantee, int smallGuarantee,
+    private static Prize DrawPrize(float possibility,float smallPossibility, int guarantee, int smallGuarantee,
         ConcurrentDictionary<uint, uint> history,
         uint groupUin) {
         history.TryAdd(groupUin, 0);
@@ -285,7 +285,14 @@ public class JmProcessor : IProcessorCore<GroupCommandData,
 
         var random = new Random();
         var randomValue = random.NextDouble();
-        return possibility > randomValue ? Prize.First : Prize.None;
+        if (possibility > randomValue) {
+            return Prize.First;
+        }
+        if (smallPossibility > randomValue) {
+            return Prize.Second;
+        }
+
+        return Prize.None;
     }
 
     public static int CalculateOptimalBlockSize(int imageWidth, int imageHeight, float density = 0.3f) {

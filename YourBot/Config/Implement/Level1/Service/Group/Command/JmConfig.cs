@@ -15,6 +15,7 @@ public class JmConfig : ASimpleGroupPermissionConfig<JmConfig>, IConfig {
     public string OptionFilePath { get; init; } = "";
     
     public float Possibility { get; init; } = 0.01f;
+    public float SmallPossibility { get; init; } = 0.01f;
     
     public int Guarantee { get; init; } = -1;
     
